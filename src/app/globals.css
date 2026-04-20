@@ -1,0 +1,191 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff; --surf: #f8f8f8; --surf2: #efefef;
+  --border: #e0e0e0; --border2: #cccccc;
+  --text: #0A0A0F; --text-muted: #666680; --text-dim: #999aaa;
+  --gold: #F5A623; --gold-dim: #C4841A;
+  --teal: #00A882; --red: #e03050; --green: #1a9e5e;
+}
+.dark {
+  --bg: #0A0A0F; --surf: #16161F; --surf2: #1C1C28;
+  --border: #1E1E2E; --border2: #2A2A3E;
+  --text: #F0F0F8; --text-muted: #9090A8; --text-dim: #5A5A72;
+  --gold: #F5A623; --gold-dim: #C4841A;
+  --teal: #00D4AA; --red: #FF4757; --green: #4caf72;
+}
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Oxygen, Ubuntu, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background 0.3s, color 0.3s;
+  overflow-x: hidden;
+}
+input, button, select, textarea { font-family: inherit; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* Responsive container */
+.container {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 16px 14px;
+}
+@media (max-width: 480px) {
+  .container { padding: 12px 10px; }
+}
+
+/* Cards */
+.card {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.card:hover {
+  border-color: var(--border2);
+  transform: translateY(-2px);
+}
+
+/* Buttons */
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: #000;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  font-size: 14px;
+  touch-action: manipulation;
+}
+.btn-gold:hover { opacity: 0.9; }
+.btn-gold:active { transform: scale(0.97); }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text-muted);
+  border-radius: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  touch-action: manipulation;
+}
+.btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+.btn-ghost:active { transform: scale(0.97); }
+
+/* Pills */
+.pill {
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.pill-gold {
+  background: rgba(245,166,35,0.12);
+  color: var(--gold);
+  border: 1px solid rgba(245,166,35,0.3);
+}
+.pill-teal {
+  background: rgba(0,212,170,0.1);
+  color: var(--teal);
+  border: 1px solid rgba(0,212,170,0.3);
+}
+.pill-red {
+  background: rgba(255,71,87,0.1);
+  color: var(--red);
+  border: 1px solid rgba(255,71,87,0.3);
+}
+
+/* Input */
+.input {
+  width: 100%;
+  background: var(--surf);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.input:focus { border-color: var(--gold); }
+.input::placeholder { color: var(--text-dim); }
+@media (max-width: 480px) {
+  .input { font-size: 16px; } /* prevents zoom on iOS */
+}
+
+/* Freshness badges */
+.fresh-0 { background: rgba(0,212,170,0.1); color: var(--teal); border: 1px solid rgba(0,212,170,0.25); }
+.fresh-1 { background: rgba(76,175,114,0.1); color: var(--green); border: 1px solid rgba(76,175,114,0.25); }
+.fresh-2 { background: rgba(245,166,35,0.1); color: var(--gold); border: 1px solid rgba(245,166,35,0.25); }
+.fresh-3 { background: rgba(224,137,24,0.1); color: #e08918; border: 1px solid rgba(224,137,24,0.25); }
+.fresh-4 { background: rgba(255,71,87,0.1); color: var(--red); border: 1px solid rgba(255,71,87,0.25); }
+
+/* Page body — account for fixed bottom nav */
+.page-body { padding-bottom: 72px; }
+
+/* Responsive grid */
+.deals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+@media (max-width: 360px) {
+  .deals-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+}
+@media (min-width: 600px) {
+  .deals-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+}
+
+/* Pills row */
+.pills-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.pills-row::-webkit-scrollbar { display: none; }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+@media (min-width: 480px) {
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* Touch targets — minimum 44px */
+button, a, [role="button"] {
+  min-height: 36px;
+  touch-action: manipulation;
+}
+
+/* Prevent horizontal scroll */
+* { max-width: 100%; }
+img { max-width: 100%; height: auto; }
