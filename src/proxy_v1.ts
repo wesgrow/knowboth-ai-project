@@ -11,8 +11,7 @@ export default async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const isPublic = PUBLIC.some(p => path.startsWith(p));
   if (!session && !isPublic) return NextResponse.redirect(new URL("/auth", req.url));
-  if (session && path === "/auth") return NextResponse.redirect(new URL("/home", req.url));
-  if (session && path === "/") return NextResponse.redirect(new URL("/home", req.url));
+  if (session && path === "/auth") return NextResponse.redirect(new URL("/deals", req.url));
   return res;
 }
 

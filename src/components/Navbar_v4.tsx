@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
+import { supabaseAuth } from "@/lib/supabase";
 
 const RADII = [5, 10, 15, 25, 50];
 
@@ -17,7 +18,6 @@ export function Navbar() {
   const pending = cart.filter(i => !i.purchased).length;
 
   const tabs = [
-    { href: "/home", label: "Home", icon: "🏠" },
     { href: "/deals", label: "Deals", icon: "🏷️" },
     { href: "/compare", label: "Compare", icon: "⚖️" },
     { href: "/cart", label: "Cart", icon: "🛒", badge: pending },
@@ -195,9 +195,15 @@ export function Navbar() {
       <header className="navbar-header">
         <div className="navbar-inner">
           <Link href="/deals" className="navbar-logo">
-            <span style={{ fontSize: 18, color: "var(--gold)" }}>✦</span>
-            <span style={{ fontSize: 16, fontWeight: 900, color: "var(--text)" }}>KNOWBOTH</span>
-            <span style={{ fontSize: 16, fontWeight: 900, color: "var(--teal)" }}>.AI</span>
+<div>
+  <div style={{ display:"flex", alignItems:"baseline", gap:2 }}>
+    <span style={{ fontSize:16, fontWeight:900, color:"var(--text)" }}>KNOWBOTH</span>
+    <span style={{ fontSize:16, fontWeight:900, color:"var(--teal)" }}>.AI</span>
+  </div>
+  <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:0.3 }}>
+    Know Your Savings. Know Your Spending.
+  </div>
+</div>
           </Link>
           <div className="navbar-right">
             <button className="loc-btn" onClick={() => setEditLoc(!editLoc)}>
@@ -209,7 +215,26 @@ export function Navbar() {
               <option value="auto">⚙️</option>
             </select>
             <div className="pts-badge">✦ {user.points || 0}</div>
-            <div className="av-btn">{user.avatar}</div>
+
+<button
+  onClick={async () => {
+    await supabaseAuth.auth.signOut();
+    window.location.href = "/auth";
+  }}
+  style={{
+    background: "rgba(255,71,87,0.1)",
+    border: "1px solid rgba(255,71,87,0.3)",
+    color: "var(--red)",
+    borderRadius: 8,
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  }}
+>
+  Sign Out
+</button>
           </div>
         </div>
 
