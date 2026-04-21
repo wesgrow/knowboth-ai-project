@@ -22,7 +22,7 @@ export default function Home() {
   const [avatar, setAvatar] = useState("🧑‍🍳");
   const [currency, setCurrency] = useState("USD");
   const [location, setLocation] = useState("");
-  const [theme, setTheme] = useState<"dark"|"light"|"auto">("dark");
+  const [theme, setTheme] = useState<"dark"|"light"|"auto">("light");
 
   useEffect(() => {
     if (user) router.push("/deals");
