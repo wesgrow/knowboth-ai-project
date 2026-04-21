@@ -68,26 +68,54 @@ export default function Home() {
         padding: "32px 24px",
       }}>
 
-        {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{
-            fontSize: 44,
-            color: "var(--gold)",
-            marginBottom: 8,
-          }}>✦</div>
-          <div style={{
-            fontSize: 24,
-            fontWeight: 900,
-            color: "var(--gold)",
-          }}>KNOWBOTH.AI</div>
-          <div style={{
-            fontSize: 12,
-            color: "var(--text-muted)",
-            marginTop: 4,
-          }}>
-            Know Your Savings. Know Your Spending.
-          </div>
-        </div>
+      {/* Logo */}
+<div style={{ textAlign: "center", marginBottom: 28 }}>
+  <div
+    style={{
+      fontSize: 44,
+      color: "var(--gold)",
+      marginBottom: 8,
+    }}
+  >
+    ✦
+  </div>
+
+  <div
+    style={{
+      fontSize: 26,
+      fontWeight: 900,
+      color: "var(--gold)",
+      lineHeight: 1.1,
+      letterSpacing: 3,
+    }}
+  >
+    KNOWBOTH
+    <span style={{ display: "block" }}>.AI</span>
+  </div>
+
+  <div
+    style={{
+      fontSize: 12,
+      color: "var(--text-muted)",
+      marginTop: 8,
+    }}
+  >
+    Know Your Savings. Know Your Spending.
+  </div>
+
+  <div
+    style={{
+      fontSize: 11,
+      color: "var(--gold)",
+      marginTop: 4,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+    }}
+  >
+    Know Both. Always.
+  </div>
+</div>
+
 
         {/* Name */}
         <div style={{
