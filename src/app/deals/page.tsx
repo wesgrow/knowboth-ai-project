@@ -1,405 +1,416 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "@/lib/supabase";
+import { Navbar } from "@/components/Navbar";
+import { useAppStore } from "@/lib/store";
+import { getFreshness, CAT_ICONS, STORE_COLORS } from "@/lib/utils";
+import toast from "react-hot-toast";
 
-/* ═══════════════════════════════════════════════════════════════
-   🏷️ DEALS PAGE v3 — with PriceSource icons (receipt/flyer/manual)
-═══════════════════════════════════════════════════════════════ */
+const CATS = ["All","Vegetables","Fruits","Dairy","Rice & Grains",
+  "Lentils & Dals","Spices","Snacks","Beverages",
+  "Oils & Ghee","Frozen","Meat & Fish","Household"];
 
-// ── Shared storage helpers ──────────────────────────────────
-async function sharedGet(key: string) {
-  try { const r = await (window as any).storage.get(key, true); return r ? JSON.parse(r.value) : null; } catch { return null; }
-}
-async function sharedSet(key: string, value: any) {
-  try { await (window as any).storage.set(key, JSON.stringify(value), true); return true; } catch { return false; }
-}
-const lsGet = (k: string, d: any) => { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : d; } catch { return d; } };
-const lsSet = (k: string, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
-
-// ── Types ────────────────────────────────────────────────────
-type SourceType = "receipt" | "flyer" | "manual";
-
-interface Deal {
-  id: string;
-  item: string;
-  store: string;
-  branch: string;
-  salePrice: number;
-  regularPrice?: number;
-  unit?: string;
-  category: string;
-  source: SourceType;
-  verifiedAt: number; // timestamp
-  expiresAt?: string; // ISO date string
-  postedBy: string;
-  upvotes: number;
-  upvotedBy: string[];
-}
-
-// ── Source config ────────────────────────────────────────────
-const SOURCE_CONFIG: Record<SourceType, { icon: string; label: string; color: string; bg: string }> = {
-  receipt: { icon: "🧾", label: "Receipt", color: "#16a34a", bg: "#dcfce7" },
-  flyer:   { icon: "📰", label: "Flyer",   color: "#0369a1", bg: "#e0f2fe" },
-  manual:  { icon: "✏️",  label: "Manual",  color: "#b45309", bg: "#fef3c7" },
-};
-
-// ── Seed data ────────────────────────────────────────────────
-const SEED_DEALS: Deal[] = [
-  { id:"d1", item:"Basmati Rice 20lb", store:"H-E-B", branch:"Coppell", salePrice:14.99, regularPrice:18.49, unit:"bag", category:"Grains", source:"flyer",   verifiedAt:Date.now()-3600000*2,  expiresAt:"2026-04-27", postedBy:"Priya", upvotes:7, upvotedBy:[] },
-  { id:"d2", item:"Whole Milk 1 Gal",  store:"Costco", branch:"Grapevine", salePrice:3.49, regularPrice:4.29, unit:"gal", category:"Dairy",  source:"receipt", verifiedAt:Date.now()-3600000*5,  postedBy:"Kumar", upvotes:4, upvotedBy:[] },
-  { id:"d3", item:"Chicken Breast",    store:"Kroger", branch:"Lewisville", salePrice:1.99, regularPrice:3.49, unit:"lb",  category:"Meat",   source:"flyer",   verifiedAt:Date.now()-3600000*10, expiresAt:"2026-04-22", postedBy:"Ananya", upvotes:12, upvotedBy:[] },
-  { id:"d4", item:"Organic Spinach",   store:"Whole Foods", branch:"Southlake", salePrice:2.99, regularPrice:4.49, unit:"bag", category:"Produce", source:"manual", verifiedAt:Date.now()-3600000*1, postedBy:"Ravi", upvotes:3, upvotedBy:[] },
-  { id:"d5", item:"Greek Yogurt 32oz", store:"Target", branch:"Coppell", salePrice:4.49, regularPrice:5.99, unit:"tub", category:"Dairy", source:"receipt", verifiedAt:Date.now()-86400000, postedBy:"Deepa", upvotes:6, upvotedBy:[] },
-];
-
-const CATEGORIES = ["All", "Grains", "Dairy", "Meat", "Produce", "Snacks", "Beverages", "Frozen", "Other"];
-const SOURCES: SourceType[] = ["receipt", "flyer", "manual"];
-
-const timeAgo = (ts: number) => {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-};
-
-const daysLeft = (iso?: string) => {
-  if (!iso) return null;
-  return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
-};
-
-const savePct = (sale: number, reg?: number) =>
-  reg && reg > sale ? Math.round((1 - sale / reg) * 100) : null;
-
-// ── PriceSource badge ─────────────────────────────────────────
-function PriceSourceBadge({ source }: { source: SourceType }) {
-  const cfg = SOURCE_CONFIG[source];
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 4,
-      padding: "2px 8px", borderRadius: 99,
-      background: cfg.bg, color: cfg.color,
-      fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
-      border: `1px solid ${cfg.color}33`,
-    }}>
-      {cfg.icon} {cfg.label}
-    </span>
-  );
-}
-
-// ── Deal card ─────────────────────────────────────────────────
-function DealCard({ deal, myId, onUpvote }: { deal: Deal; myId: string; onUpvote: (id: string) => void }) {
-  const pct  = savePct(deal.salePrice, deal.regularPrice);
-  const days = daysLeft(deal.expiresAt);
-  const voted = deal.upvotedBy.includes(myId);
-
-  return (
-    <div style={{
-      background: "#fff", borderRadius: 16,
-      border: "1px solid #e5e7eb",
-      padding: "16px 18px",
-      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-      display: "flex", flexDirection: "column", gap: 10,
-    }}>
-      {/* Top row: item + save badge */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", lineHeight: 1.3 }}>{deal.item}</div>
-          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{deal.store} · {deal.branch}</div>
-        </div>
-        {pct && (
-          <span style={{
-            background: "#dc2626", color: "#fff",
-            fontWeight: 800, fontSize: 13, padding: "3px 9px",
-            borderRadius: 8, whiteSpace: "nowrap",
-          }}>
-            -{pct}%
-          </span>
-        )}
-      </div>
-
-      {/* Price row */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontSize: 22, fontWeight: 800, color: "#15803d" }}>
-          ${deal.salePrice.toFixed(2)}
-        </span>
-        {deal.unit && <span style={{ fontSize: 12, color: "#9ca3af" }}>/{deal.unit}</span>}
-        {deal.regularPrice && (
-          <span style={{ fontSize: 13, color: "#9ca3af", textDecoration: "line-through" }}>
-            ${deal.regularPrice.toFixed(2)}
-          </span>
-        )}
-      </div>
-
-      {/* Source + expiry row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <PriceSourceBadge source={deal.source} />
-
-        {days !== null && (
-          <span style={{
-            fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
-            background: days <= 2 ? "#fef2f2" : "#f0fdf4",
-            color: days <= 2 ? "#dc2626" : "#15803d",
-            border: `1px solid ${days <= 2 ? "#fca5a5" : "#86efac"}`,
-          }}>
-            ⏰ {days <= 0 ? "Expires today" : `${days}d left`}
-          </span>
-        )}
-
-        <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>
-          {timeAgo(deal.verifiedAt)} · {deal.postedBy}
-        </span>
-      </div>
-
-      {/* Upvote */}
-      <button
-        onClick={() => onUpvote(deal.id)}
-        style={{
-          display: "flex", alignItems: "center", gap: 6,
-          background: voted ? "#f0fdf4" : "#f9fafb",
-          border: `1px solid ${voted ? "#86efac" : "#e5e7eb"}`,
-          borderRadius: 8, padding: "6px 12px",
-          cursor: "pointer", fontSize: 13, fontWeight: 600,
-          color: voted ? "#15803d" : "#374151",
-          alignSelf: "flex-start", transition: "all 0.15s",
-        }}
-      >
-        👍 {deal.upvotes} {voted ? "Thanks!" : "Helpful"}
-      </button>
-    </div>
-  );
-}
-
-// ── Add deal form ─────────────────────────────────────────────
-function AddDealForm({ onAdd, onClose }: { onAdd: (d: Deal) => void; onClose: () => void }) {
-  const [form, setForm] = useState({
-    item: "", store: "", branch: "", salePrice: "", regularPrice: "",
-    unit: "", category: "Grains", source: "receipt" as SourceType, expiresAt: "",
-  });
-
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-
-  const submit = () => {
-    if (!form.item || !form.store || !form.salePrice) return;
-    onAdd({
-      id: Date.now().toString(36),
-      item: form.item, store: form.store, branch: form.branch,
-      salePrice: parseFloat(form.salePrice),
-      regularPrice: form.regularPrice ? parseFloat(form.regularPrice) : undefined,
-      unit: form.unit || undefined,
-      category: form.category,
-      source: form.source,
-      verifiedAt: Date.now(),
-      expiresAt: form.expiresAt || undefined,
-      postedBy: "You",
-      upvotes: 0, upvotedBy: [],
-    });
-    onClose();
-  };
-
-  const field = (label: string, key: string, placeholder?: string, type = "text") => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</label>
-      <input
-        type={type} value={(form as any)[key]} placeholder={placeholder}
-        onChange={e => set(key, e.target.value)}
-        style={{
-          border: "1px solid #d1d5db", borderRadius: 8, padding: "8px 10px",
-          fontSize: 14, outline: "none", background: "#fff",
-        }}
-      />
-    </div>
-  );
-
-  return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-      display: "flex", alignItems: "flex-end", justifyContent: "center",
-      zIndex: 999, padding: 16,
-    }}>
-      <div style={{
-        background: "#fff", borderRadius: 20, padding: 20,
-        width: "100%", maxWidth: 480,
-        display: "flex", flexDirection: "column", gap: 14,
-        maxHeight: "85vh", overflowY: "auto",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontWeight: 700, fontSize: 17 }}>📢 Post a Deal</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#6b7280" }}>✕</button>
-        </div>
-
-        {field("Item Name *", "item", "e.g. Basmati Rice 20lb")}
-        {field("Store *", "store", "e.g. H-E-B")}
-        {field("Branch / Location", "branch", "e.g. Coppell")}
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {field("Sale Price *", "salePrice", "0.00", "number")}
-          {field("Regular Price", "regularPrice", "0.00", "number")}
-        </div>
-        {field("Unit", "unit", "lb / bag / gal")}
-
-        {/* Source selector */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Price Source *</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            {SOURCES.map(s => {
-              const cfg = SOURCE_CONFIG[s];
-              const active = form.source === s;
-              return (
-                <button key={s} onClick={() => set("source", s)} style={{
-                  flex: 1, padding: "8px 4px", borderRadius: 10, cursor: "pointer",
-                  border: `2px solid ${active ? cfg.color : "#e5e7eb"}`,
-                  background: active ? cfg.bg : "#f9fafb",
-                  color: active ? cfg.color : "#6b7280",
-                  fontWeight: 600, fontSize: 13, transition: "all 0.15s",
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                }}>
-                  <span style={{ fontSize: 20 }}>{cfg.icon}</span>
-                  <span>{cfg.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Category */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Category</label>
-          <select value={form.category} onChange={e => set("category", e.target.value)}
-            style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: "8px 10px", fontSize: 14, background: "#fff" }}>
-            {CATEGORIES.filter(c => c !== "All").map(c => <option key={c}>{c}</option>)}
-          </select>
-        </div>
-
-        {field("Expires On", "expiresAt", "", "date")}
-
-        <button onClick={submit} style={{
-          background: "#15803d", color: "#fff", border: "none", borderRadius: 10,
-          padding: "12px", fontWeight: 700, fontSize: 15, cursor: "pointer",
-        }}>
-          ✅ Post Deal
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────
 export default function DealsPage() {
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [cat, setCat] = useState("All");
-  const [srcFilter, setSrcFilter] = useState<SourceType | "All">("All");
   const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const myId = lsGet("sm_my_id", (() => { const id = Math.random().toString(36).slice(2); lsSet("sm_my_id", id); return id; })());
+  const [cat, setCat] = useState("All");
+  const [storeFilter, setStoreFilter] = useState("All");
+  const [sort, setSort] = useState("newest");
+  const [stores, setStores] = useState<string[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadMode, setUploadMode] = useState<"image"|"url">("image");
+  const [storeName, setStoreName] = useState("");
+  const [saleEnd, setSaleEnd] = useState("");
+  const [url, setUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [extracted, setExtracted] = useState<any[]>([]);
+  const [file, setFile] = useState<File|null>(null);
+  const [preview, setPreview] = useState<string|null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { addToCart, cart } = useAppStore();
 
-  const load = useCallback(async () => {
-    const saved = await sharedGet("sm_deals_v5");
-    setDeals(saved && saved.length ? saved : SEED_DEALS);
+  useEffect(() => { fetchDeals(); }, []);
+
+  async function fetchDeals() {
+    setLoading(true);
+    const { data: dealRows, error: e1 } = await supabase
+      .from("deals")
+      .select("id, sale_end, brand_id, location_id")
+      .eq("status", "approved");
+
+    if (!dealRows || dealRows.length === 0) {
+      setItems([]); setLoading(false); return;
+    }
+
+    const dealIds = dealRows.map((d: any) => d.id);
+    const brandIds = [...new Set(dealRows.map((d: any) => d.brand_id).filter(Boolean))] as string[];
+
+    const { data: brandRows } = await supabase
+      .from("brands").select("id, name, slug").in("id", brandIds);
+
+    const { data: dealItems } = await supabase
+      .from("deal_items")
+      .select("id, deal_id, name, normalized_name, price, regular_price, unit, category, savings_pct, created_at")
+      .in("deal_id", dealIds)
+      .order("created_at", { ascending: false });
+
+    if (!dealItems) { setLoading(false); return; }
+
+    const brandMap: Record<string, any> = {};
+    (brandRows || []).forEach((b: any) => { brandMap[b.id] = b; });
+    const dealMap: Record<string, any> = {};
+    dealRows.forEach((d: any) => { dealMap[d.id] = d; });
+
+    const merged = dealItems.map((item: any) => ({
+      ...item,
+      deal: dealMap[item.deal_id],
+      brand: brandMap[dealMap[item.deal_id]?.brand_id],
+    }));
+
+    setItems(merged);
+    setStores([...new Set(merged.map((i: any) => i.brand?.name).filter(Boolean))] as string[]);
     setLoading(false);
-  }, []);
+  }
 
-  useEffect(() => { load(); }, [load]);
+  function getDaysLeft(saleEnd: string | null) {
+    if (!saleEnd) return null;
+    return Math.ceil((new Date(saleEnd).getTime() - Date.now()) / 86400000);
+  }
 
-  const save = async (updated: Deal[]) => {
-    setDeals(updated);
-    await sharedSet("sm_deals_v5", updated);
-  };
+  function getExpiryBadge(saleEnd: string | null) {
+    const d = getDaysLeft(saleEnd);
+    if (d === null) return null;
+    if (d < 0) return { label: "Expired", color: "#FF4757", bg: "rgba(255,71,87,0.1)" };
+    if (d === 0) return { label: "Last Day!", color: "#FF4757", bg: "rgba(255,71,87,0.1)" };
+    if (d <= 2) return { label: `${d}d left`, color: "#e08918", bg: "rgba(224,137,24,0.1)" };
+    if (d <= 7) return { label: `${d}d left`, color: "var(--gold)", bg: "rgba(245,166,35,0.1)" };
+    return { label: `${d}d left`, color: "var(--teal)", bg: "rgba(0,212,170,0.1)" };
+  }
 
-  const handleUpvote = async (id: string) => {
-    const updated = deals.map(d => {
-      if (d.id !== id) return d;
-      const alreadyVoted = d.upvotedBy.includes(myId);
-      return {
-        ...d,
-        upvotes: alreadyVoted ? d.upvotes - 1 : d.upvotes + 1,
-        upvotedBy: alreadyVoted ? d.upvotedBy.filter(x => x !== myId) : [...d.upvotedBy, myId],
-      };
+  function toB64(f: File): Promise<string> {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res((r.result as string).split(",")[1]);
+      r.onerror = rej;
+      r.readAsDataURL(f);
     });
-    await save(updated);
-  };
+  }
 
-  const handleAdd = async (d: Deal) => {
-    await save([d, ...deals]);
-  };
+  async function handleExtract() {
+    if (!storeName.trim()) { toast.error("Enter store name"); return; }
+    if (uploadMode === "image" && !file) { toast.error("Select a file"); return; }
+    if (uploadMode === "url" && !url.trim()) { toast.error("Enter URL"); return; }
+    setUploading(true);
+    try {
+      let body: any = { store: storeName };
+      if (uploadMode === "image" && file) {
+        body.b64 = await toB64(file);
+        body.mime = file.type;
+      } else {
+        body.url = url;
+      }
+      const res = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setExtracted(data.items || []);
+      // Clear file from memory immediately after extraction
+      setFile(null);
+      setPreview(null);
+      toast.success(`✦ Found ${data.items?.length || 0} deals!`);
+    } catch (e: any) {
+      toast.error("Extract failed: " + e.message);
+    }
+    setUploading(false);
+  }
 
-  const filtered = deals.filter(d => {
-    if (cat !== "All" && d.category !== cat) return false;
-    if (srcFilter !== "All" && d.source !== srcFilter) return false;
-    if (search && !d.item.toLowerCase().includes(search.toLowerCase()) && !d.store.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
+  async function publishDeals() {
+    if (!extracted.length || !storeName.trim()) return;
+    try {
+      const brand = await supabase
+        .from("brands")
+        .select("id")
+        .ilike("name", `%${storeName}%`)
+        .single();
+
+      const brandId = brand.data?.id;
+      if (!brandId) { toast.error("Store not found in database"); return; }
+
+      const { data: deal } = await supabase
+        .from("deals")
+        .insert({
+          brand_id: brandId,
+          status: "approved",
+          applies_to_all_locations: true,
+          sale_start: new Date().toISOString().split("T")[0],
+          sale_end: saleEnd || null,
+          file_deleted: true, // Mark as deleted since we never stored it
+        })
+        .select("id")
+        .single();
+
+      if (!deal?.id) { toast.error("Failed to create deal"); return; }
+
+      const dealItems = extracted.map(item => ({
+        deal_id: deal.id,
+        name: item.name,
+        normalized_name: item.normalized_name || item.name.toLowerCase(),
+        price: parseFloat(item.price) || 0,
+        regular_price: item.regular_price ? parseFloat(item.regular_price) : null,
+        unit: item.unit || "ea",
+        category: item.category || "Other",
+        notes: item.notes || null,
+      }));
+
+      await supabase.from("deal_items").insert(dealItems);
+
+      toast.success(`🚀 ${extracted.length} deals published!`);
+      setExtracted([]);
+      setStoreName("");
+      setSaleEnd("");
+      setUrl("");
+      setShowUpload(false);
+      fetchDeals();
+    } catch (e: any) {
+      toast.error("Publish failed: " + e.message);
+    }
+  }
+
+  const filtered = items.filter(item => {
+    const q = search.toLowerCase();
+    const mq = !q || item.name?.toLowerCase().includes(q);
+    const mc = cat === "All" || item.category === cat;
+    const ms = storeFilter === "All" || item.brand?.name === storeFilter;
+    const notExpired = getDaysLeft(item.deal?.sale_end) === null || getDaysLeft(item.deal?.sale_end)! >= 0;
+    return mq && mc && ms && notExpired;
+  }).sort((a, b) => {
+    if (sort === "price_asc") return a.price - b.price;
+    if (sort === "savings") return (b.savings_pct || 0) - (a.savings_pct || 0);
+    if (sort === "expiring") return (getDaysLeft(a.deal?.sale_end) || 999) - (getDaysLeft(b.deal?.sale_end) || 999);
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
+  function handleAdd(item: any) {
+    if (cart.find(i => i.id === item.id)) { toast("Already in cart"); return; }
+    addToCart({
+      id: item.id, name: item.name, price: item.price,
+      unit: item.unit || "ea", store: item.brand?.name || "",
+      store_slug: item.brand?.slug || "",
+      category: item.category || "Other",
+      icon: CAT_ICONS[item.category] || "🛒",
+    });
+    toast.success(`✦ ${item.name} added`);
+  }
+
   return (
-    <div style={{ background: "#f9fafb", minHeight: "100vh", fontFamily: "'Segoe UI', sans-serif" }}>
-      {/* Header */}
-      <div style={{ background: "#fff", padding: "16px 16px 0", borderBottom: "1px solid #e5e7eb", position: "sticky", top: 0, zIndex: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <span style={{ fontWeight: 800, fontSize: 20 }}>🏷️ Community Deals</span>
-          <button onClick={() => setShowForm(true)} style={{
-            background: "#15803d", color: "#fff", border: "none",
-            borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 14, cursor: "pointer",
-          }}>
-            + Post Deal
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      <Navbar />
+      <div style={{ maxWidth: 800, margin: "0 auto", padding: "16px 14px" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div style={{ position: "relative", flex: 1, marginRight: 10 }}>
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }}>🔍</span>
+            <input className="input" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search any item..." style={{ paddingLeft: 36 }} />
+          </div>
+          <button onClick={() => setShowUpload(!showUpload)} className="btn-gold"
+            style={{ padding: "10px 16px", fontSize: 12, whiteSpace: "nowrap" }}>
+            📷 Post Deal
           </button>
         </div>
 
-        {/* Search */}
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="🔍 Search item or store…"
-          style={{
-            width: "100%", border: "1px solid #e5e7eb", borderRadius: 10,
-            padding: "9px 12px", fontSize: 14, background: "#f9fafb",
-            outline: "none", boxSizing: "border-box", marginBottom: 10,
-          }}
-        />
+        {/* Upload Panel */}
+        {showUpload && (
+          <div style={{ background: "var(--surf)", border: "1px solid var(--border)", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>Post a Deal</div>
 
-        {/* Category tabs */}
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 12, scrollbarWidth: "none" }}>
-          {CATEGORIES.map(c => (
+            {/* Mode Toggle */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              {(["image", "url"] as const).map(m => (
+                <button key={m} onClick={() => setUploadMode(m)} style={{
+                  flex: 1, padding: "8px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  borderRadius: 9, border: "none",
+                  background: uploadMode === m ? "rgba(245,166,35,0.12)" : "var(--surf2)",
+                  color: uploadMode === m ? "var(--gold)" : "var(--text-muted)",
+                  outline: uploadMode === m ? "1px solid rgba(245,166,35,0.35)" : "1px solid var(--border)",
+                }}>
+                  {m === "image" ? "📷 Upload Flyer" : "🔗 Paste URL"}
+                </button>
+              ))}
+            </div>
+
+            {/* Store + Date */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <input className="input" value={storeName} onChange={e => setStoreName(e.target.value)}
+                placeholder="Store name *" />
+              <input className="input" type="date" value={saleEnd} onChange={e => setSaleEnd(e.target.value)}
+                title="Sale end date" />
+            </div>
+
+            {/* Image Upload */}
+            {uploadMode === "image" && (
+              <>
+                <input ref={fileRef} type="file" accept="image/*,application/pdf"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) { setFile(f); setPreview(URL.createObjectURL(f)); }
+                  }} style={{ display: "none" }} />
+                <div onClick={() => fileRef.current?.click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) { setFile(f); setPreview(URL.createObjectURL(f)); } }}
+                  style={{ border: `2px dashed ${file ? "var(--gold)" : "var(--border2)"}`, borderRadius: 10, padding: "20px", textAlign: "center", cursor: "pointer", marginBottom: 10, background: "var(--surf2)" }}>
+                  {preview
+                    ? <img src={preview} alt="" style={{ maxHeight: 120, borderRadius: 8, objectFit: "contain" }} />
+                    : <><div style={{ fontSize: 28, marginBottom: 6 }}>📷</div><div style={{ fontSize: 13, color: "var(--text-muted)" }}>Drop flyer image or tap to upload</div></>
+                  }
+                </div>
+              </>
+            )}
+
+            {/* URL Input */}
+            {uploadMode === "url" && (
+              <input className="input" value={url} onChange={e => setUrl(e.target.value)}
+                placeholder="https://store.com/weekly-deals" style={{ marginBottom: 10 }} />
+            )}
+
+            <button onClick={handleExtract} disabled={uploading} className="btn-gold"
+              style={{ width: "100%", padding: 12, fontSize: 13, opacity: uploading ? 0.7 : 1 }}>
+              {uploading ? "🤖 Extracting with AI..." : "🤖 Extract with KNOWBOTH AI"}
+            </button>
+
+            {/* Extracted Items */}
+            {extracted.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{extracted.length} items extracted</span>
+                  <button onClick={publishDeals} style={{
+                    background: "linear-gradient(135deg,var(--teal),#00A882)", color: "#000",
+                    border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer"
+                  }}>🚀 Publish Live</button>
+                </div>
+                <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: 5 }}>
+                  {extracted.map((item, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surf2)", borderRadius: 8, padding: "8px 12px" }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{item.name}</div>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{item.category} · {item.unit}</div>
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gold)" }}>${parseFloat(item.price || 0).toFixed(2)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Category Pills */}
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 10, paddingBottom: 4 }}>
+          {CATS.map(c => (
             <button key={c} onClick={() => setCat(c)} style={{
-              background: cat === c ? "#15803d" : "#f3f4f6",
-              color: cat === c ? "#fff" : "#374151",
-              border: "none", borderRadius: 99, padding: "5px 12px",
-              fontWeight: 600, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer",
+              borderRadius: 20, padding: "5px 12px", fontSize: 11, fontWeight: 700,
+              cursor: "pointer", whiteSpace: "nowrap", border: "none",
+              background: cat === c ? "rgba(245,166,35,0.12)" : "var(--surf2)",
+              color: cat === c ? "var(--gold)" : "var(--text-muted)",
+              outline: cat === c ? "1px solid rgba(245,166,35,0.35)" : "1px solid var(--border)",
             }}>{c}</button>
           ))}
         </div>
 
-        {/* Source filter tabs */}
-        <div style={{ display: "flex", gap: 6, paddingBottom: 10, overflowX: "auto", scrollbarWidth: "none" }}>
-          {(["All", ...SOURCES] as (SourceType | "All")[]).map(s => {
-            const active = srcFilter === s;
-            const cfg = s !== "All" ? SOURCE_CONFIG[s] : null;
+        {/* Store Pills */}
+        {stores.length > 0 && (
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 12, paddingBottom: 4 }}>
+            {["All", ...stores].map(s => (
+              <button key={s} onClick={() => setStoreFilter(s)} style={{
+                borderRadius: 20, padding: "5px 12px", fontSize: 11, fontWeight: 700,
+                cursor: "pointer", whiteSpace: "nowrap", border: "none",
+                background: storeFilter === s ? "rgba(245,166,35,0.12)" : "var(--surf2)",
+                color: storeFilter === s ? "var(--gold)" : "var(--text-muted)",
+                outline: storeFilter === s ? "1px solid rgba(245,166,35,0.35)" : "1px solid var(--border)",
+              }}>{s}</button>
+            ))}
+          </div>
+        )}
+
+        {/* Sort + Count */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{filtered.length} deals</span>
+          <select className="input" value={sort} onChange={e => setSort(e.target.value)}
+            style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}>
+            <option value="newest">Newest</option>
+            <option value="price_asc">Price Low</option>
+            <option value="savings">Best Savings</option>
+            <option value="expiring">Expiring Soon</option>
+          </select>
+        </div>
+
+        {loading && <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-muted)" }}>Loading deals...</div>}
+        {!loading && items.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px 0" }}>
+            <div style={{ fontSize: 44, marginBottom: 12 }}>🏪</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>No deals yet</div>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>Tap Post Deal to add the first deal</p>
+          </div>
+        )}
+        {!loading && items.length > 0 && filtered.length === 0 && (
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>No matches</div>
+          </div>
+        )}
+
+        {/* Deal Grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 10 }}>
+          {filtered.map(item => {
+            const color = STORE_COLORS[item.brand?.slug] || "var(--gold)";
+            const fresh = getFreshness(item.created_at);
+            const inCart = cart.find(i => i.id === item.id);
+            const sav = item.regular_price ? Math.round((1 - item.price / item.regular_price) * 100) : null;
+            const expiry = getExpiryBadge(item.deal?.sale_end);
             return (
-              <button key={s} onClick={() => setSrcFilter(s)} style={{
-                background: active ? (cfg ? cfg.bg : "#111827") : "#f3f4f6",
-                color: active ? (cfg ? cfg.color : "#fff") : "#6b7280",
-                border: `1.5px solid ${active ? (cfg ? cfg.color : "#111827") : "transparent"}`,
-                borderRadius: 99, padding: "4px 12px",
-                fontWeight: 600, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 4,
-              }}>
-                {cfg ? cfg.icon : "🗂️"} {cfg ? cfg.label : "All Sources"}
-              </button>
+              <div key={item.id} className="card" style={{ overflow: "hidden" }}>
+                <div style={{ height: 3, background: color }} />
+                <div style={{ padding: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontSize: 9, color: "var(--text-dim)", fontWeight: 700, textTransform: "uppercase" }}>{item.category}</span>
+                    {sav && <span className="pill pill-teal" style={{ fontSize: 9 }}>-{sav}%</span>}
+                  </div>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>{CAT_ICONS[item.category] || "🛒"}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, lineHeight: 1.3, color: "var(--text)" }}>{item.name}</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 4 }}>
+                    <span style={{ fontSize: 20, fontWeight: 900, color: "var(--gold)" }}>${item.price?.toFixed(2)}</span>
+                    <span style={{ fontSize: 10, color: "var(--text-dim)" }}>/{item.unit || "ea"}</span>
+                  </div>
+                  {item.regular_price && (
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", textDecoration: "line-through", marginBottom: 4 }}>
+                      ${item.regular_price?.toFixed(2)}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+                    <span style={{ borderRadius: 20, padding: "2px 8px", fontSize: 9, fontWeight: 700, background: `${color}18`, color, border: `1px solid ${color}44` }}>
+                      {item.brand?.name}
+                    </span>
+                    <span className={`pill fresh-${fresh.level}`} style={{ fontSize: 9 }}>{fresh.label}</span>
+                    {expiry && (
+                      <span style={{ borderRadius: 20, padding: "2px 8px", fontSize: 9, fontWeight: 700, background: expiry.bg, color: expiry.color, border: `1px solid ${expiry.color}44` }}>
+                        ⏰ {expiry.label}
+                      </span>
+                    )}
+                  </div>
+                  <button onClick={() => handleAdd(item)} className={inCart ? "btn-ghost" : "btn-gold"}
+                    style={{ width: "100%", padding: "7px", fontSize: 11 }}>
+                    {inCart ? "✓ Added" : "+ Add to Cart"}
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
       </div>
-
-      {/* Cards */}
-      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-        {loading && <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>Loading deals…</div>}
-        {!loading && filtered.length === 0 && (
-          <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>No deals found 🤷</div>
-        )}
-        {filtered.map(d => (
-          <DealCard key={d.id} deal={d} myId={myId} onUpvote={handleUpvote} />
-        ))}
-      </div>
-
-      {showForm && <AddDealForm onAdd={handleAdd} onClose={() => setShowForm(false)} />}
     </div>
   );
 }
