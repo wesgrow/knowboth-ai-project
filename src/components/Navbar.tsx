@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
+import { supabaseAuth } from "@/lib/supabase";
 
 const RADII = [5, 10, 15, 25, 50];
 
@@ -208,7 +209,26 @@ export function Navbar() {
               <option value="auto">⚙️</option>
             </select>
             <div className="pts-badge">✦ {user.points || 0}</div>
-            <div className="av-btn">{user.avatar}</div>
+
+<button
+  onClick={async () => {
+    await supabaseAuth.auth.signOut();
+    window.location.href = "/auth";
+  }}
+  style={{
+    background: "rgba(255,71,87,0.1)",
+    border: "1px solid rgba(255,71,87,0.3)",
+    color: "var(--red)",
+    borderRadius: 8,
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  }}
+>
+  Sign Out
+</button>
           </div>
         </div>
 

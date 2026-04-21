@@ -26,7 +26,7 @@ function CompareContent() {
 
     const { data: dealItems } = await supabase
       .from("deal_items")
-      .select("id, name, normalized_name, price, regular_price, unit, category, created_at, deal_id, source")
+      .select("id, name, normalized_name, price, regular_price, unit, category, created_at, deal_id")
       .ilike("normalized_name", `%${search}%`)
       .order("price", { ascending: true })
       .limit(10);
@@ -211,7 +211,6 @@ function CompareContent() {
                       storeName={item.brand?.name}
                       branchName={item.location?.branch_name}
                       lastUpdated={item.created_at}
-                      source={item.source}
                       size="sm"
                     />
 

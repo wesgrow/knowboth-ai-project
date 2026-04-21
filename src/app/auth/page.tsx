@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabaseAuth } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+
 
 export default function AuthPage() {
   const router = useRouter();
@@ -16,11 +17,11 @@ export default function AuthPage() {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabaseAuth.auth.signUp({ email, password });
         if (error) throw error;
         toast.success("Check email to confirm signup!");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabaseAuth.auth.signInWithPassword({ email, password });
         if (error) throw error;
         router.push("/deals");
       }
