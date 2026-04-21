@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-interface CartItem { id:string;name:string;price:number;unit:string;store:string;store_slug:string;category:string;icon:string;qty:number;purchased:boolean; }
+interface CartItem { id:string;name:string;price:number;unit:string;store:string;store_slug?:string;category:string;icon:string;qty:number;purchased:boolean; }
 interface PantryItem { id:string;name:string;price:number;unit:string;store:string;category:string;icon:string;qty:number; }
 interface User { name:string;avatar:string;zip:string;city:string;currency:string;theme:"dark"|"light"|"auto";points:number; }
 
