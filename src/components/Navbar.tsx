@@ -195,9 +195,15 @@ export function Navbar() {
       <header className="navbar-header">
         <div className="navbar-inner">
           <Link href="/deals" className="navbar-logo">
-            <span style={{ fontSize: 18, color: "var(--gold)" }}>✦</span>
-            <span style={{ fontSize: 16, fontWeight: 900, color: "var(--text)" }}>KNOWBOTH</span>
-            <span style={{ fontSize: 16, fontWeight: 900, color: "var(--teal)" }}>.AI</span>
+<div>
+  <div style={{ display:"flex", alignItems:"baseline", gap:2 }}>
+    <span style={{ fontSize:16, fontWeight:900, color:"var(--text)" }}>KNOWBOTH</span>
+    <span style={{ fontSize:16, fontWeight:900, color:"var(--teal)" }}>.AI</span>
+  </div>
+  <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:0.3 }}>
+    Know Your Savings. Know Your Spending.
+  </div>
+</div>
           </Link>
           <div className="navbar-right">
             <button className="loc-btn" onClick={() => setEditLoc(!editLoc)}>
