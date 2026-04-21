@@ -68,7 +68,7 @@ export default function AuthPage() {
         </button>
 
         {mode==="login" && (
-          <button onClick={async()=>{ if(!email){toast.error("Enter email first");return;} await supabase.auth.resetPasswordForEmail(email); toast.success("Reset link sent!"); }}
+          <button onClick={async()=>{ if(!email){toast.error("Enter email first");return;} await supabaseAuth.auth.resetPasswordForEmail(email); toast.success("Reset link sent!"); }}
             style={{ background:"none", border:"none", color:"var(--text-muted)", fontSize:12, cursor:"pointer", width:"100%", marginTop:12, textAlign:"center" }}>
             Forgot password?
           </button>
