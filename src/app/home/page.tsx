@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
+import { NotificationManager } from "@/components/NotificationsManager";
 import { getFreshness, CAT_ICONS, STORE_COLORS, getLevel, formatCurrency } from "@/lib/utils";
 
 const LEADERBOARD = [
@@ -105,7 +106,8 @@ export default function HomePage() {
           <div style={{ fontSize:12, color:"var(--text-muted)", marginTop:3 }}>
             {getLevel(user?.points||0)} · ✦ {user?.points||0} pts · 📍 {user?.city||user?.zip||"Set location"}
           </div>
-        </div>
+        </div>        {/* Notifications */}
+        <NotificationManager />
 
         {/* Summary Cards */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:20 }}>
