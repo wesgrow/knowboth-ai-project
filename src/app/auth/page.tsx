@@ -29,7 +29,7 @@ export default function AuthPage() {
   }
 
   return(
-    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+    <div style={{minHeight:"100vh",background:"#F2F2F7",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
       {/* Logo */}
       <div style={{textAlign:"center",marginBottom:40}}>
         <div style={{width:72,height:72,borderRadius:20,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,margin:"0 auto 16px",boxShadow:"0 8px 24px rgba(255,159,10,0.4)"}}>✦</div>
