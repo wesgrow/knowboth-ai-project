@@ -30,48 +30,49 @@ export default function AuthPage() {
 
   return(
     <div style={{minHeight:"100vh",background:"#F2F2F7",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+
       {/* Logo */}
-      <div style={{textAlign:"center",marginBottom:40}}>
-        <div style={{width:72,height:72,borderRadius:20,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,margin:"0 auto 16px",boxShadow:"0 8px 24px rgba(255,159,10,0.4)"}}>✦</div>
-        <div style={{fontSize:28,fontWeight:700,color:"var(--text)",letterSpacing:-0.8}}>KNOWBOTH<span style={{color:"var(--gold)"}}>.AI</span></div>
-        <div style={{fontSize:14,color:"var(--text-muted)",marginTop:6,letterSpacing:-0.2}}>Know Your Savings. Know Your Spending.</div>
+      <div style={{textAlign:"center",marginBottom:36}}>
+        <div style={{width:68,height:68,borderRadius:18,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,margin:"0 auto 14px",boxShadow:"0 8px 24px rgba(255,159,10,0.3)"}}>✦</div>
+        <div style={{fontSize:26,fontWeight:800,color:"#1C1C1E",letterSpacing:-0.8}}>KNOWBOTH<span style={{color:"#FF9F0A"}}>.AI</span></div>
+        <div style={{fontSize:13,color:"#6D6D72",marginTop:5,letterSpacing:-0.1}}>Know Your Savings. Know Your Spending.</div>
       </div>
 
       {/* Card */}
-      <div style={{width:"100%",maxWidth:360,background:"var(--surf)",borderRadius:24,padding:"28px 24px",boxShadow:"var(--shadow-lg)"}}>
+      <div style={{width:"100%",maxWidth:360,background:"#fff",borderRadius:20,padding:"24px 20px",boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
+
         {/* Toggle */}
-        <div style={{display:"flex",background:"var(--surf2)",borderRadius:12,padding:3,marginBottom:24,gap:3}}>
+        <div style={{display:"flex",background:"#F2F2F7",borderRadius:12,padding:3,marginBottom:22,gap:3}}>
           {(["login","signup"] as const).map(m=>(
-            <button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:mode===m?"var(--surf)":"transparent",color:mode===m?"var(--text)":"var(--text-muted)",boxShadow:mode===m?"var(--shadow-sm)":"none",transition:"all 0.2s",letterSpacing:-0.2}}>
+            <button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:mode===m?"#fff":"transparent",color:mode===m?"#1C1C1E":"#AEAEB2",boxShadow:mode===m?"0 1px 3px rgba(0,0,0,0.1)":"none",transition:"all 0.2s"}}>
               {m==="login"?"Sign In":"Sign Up"}
             </button>
           ))}
         </div>
 
-        <div style={{fontSize:12,fontWeight:600,color:"var(--text-muted)",letterSpacing:0.3,marginBottom:6}}>EMAIL</div>
-        <input className="input" type="email" value={email} onChange={e=>setEmail(e.target.value)}
-          placeholder="you@example.com" style={{marginBottom:14}}
-          onKeyDown={e=>e.key==="Enter"&&handleAuth()} />
+        {/* Email */}
+        <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",letterSpacing:0.5,marginBottom:6}}>EMAIL</div>
+        <input style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"12px 14px",fontSize:15,color:"#1C1C1E",outline:"none",marginBottom:14}} type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={e=>e.key==="Enter"&&handleAuth()} />
 
-        <div style={{fontSize:12,fontWeight:600,color:"var(--text-muted)",letterSpacing:0.3,marginBottom:6}}>PASSWORD</div>
-        <input className="input" type="password" value={password} onChange={e=>setPassword(e.target.value)}
-          placeholder="••••••••" style={{marginBottom:24}}
-          onKeyDown={e=>e.key==="Enter"&&handleAuth()} />
+        {/* Password */}
+        <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",letterSpacing:0.5,marginBottom:6}}>PASSWORD</div>
+        <input style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"12px 14px",fontSize:15,color:"#1C1C1E",outline:"none",marginBottom:22}} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&handleAuth()} />
 
-        <button className="btn-gold" onClick={handleAuth} disabled={loading}
-          style={{width:"100%",padding:15,fontSize:16,opacity:loading?0.7:1,letterSpacing:-0.3}}>
+        {/* Submit */}
+        <button onClick={handleAuth} disabled={loading} style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:loading?0.7:1,boxShadow:"0 4px 12px rgba(255,159,10,0.35)",letterSpacing:-0.2}}>
           {loading?"Loading...":mode==="login"?"Sign In →":"Create Account →"}
         </button>
 
+        {/* Forgot */}
         {mode==="login"&&(
           <button onClick={async()=>{if(!email){toast.error("Enter email first");return;}await supabaseAuth.auth.resetPasswordForEmail(email);toast.success("Reset link sent!");}}
-            style={{background:"none",border:"none",color:"var(--blue)",fontSize:14,cursor:"pointer",width:"100%",marginTop:14,textAlign:"center",fontWeight:500}}>
+            style={{background:"none",border:"none",color:"#0A84FF",fontSize:13,cursor:"pointer",width:"100%",marginTop:12,textAlign:"center",fontWeight:500}}>
             Forgot password?
           </button>
         )}
       </div>
 
-      <div style={{marginTop:24,fontSize:12,color:"var(--text-dim)",textAlign:"center"}}>
+      <div style={{marginTop:20,fontSize:11,color:"#AEAEB2",textAlign:"center"}}>
         By continuing, you agree to our Terms & Privacy Policy
       </div>
     </div>
