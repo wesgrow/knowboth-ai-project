@@ -34,7 +34,7 @@ export function AuthSync() {
             currency: "USD",
             zip: "75074",
             city: "DFW",
-            theme: "dark",
+            theme: "light",
             points: 0,
           });
         }

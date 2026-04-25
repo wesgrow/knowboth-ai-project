@@ -1,0 +1,366 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   KNOWBOTH.AI — Responsive Design System
+   Mobile-first, scales to desktop
+   ============================================ */
+
+:root {
+  --bg: #F2F2F7;
+  --surf: #FFFFFF;
+  --surf2: #F2F2F7;
+  --surf3: rgba(255,255,255,0.85);
+  --border: rgba(0,0,0,0.08);
+  --border2: rgba(0,0,0,0.12);
+  --text: #1C1C1E;
+  --text-muted: #6D6D72;
+  --text-dim: #AEAEB2;
+  --gold: #FF9F0A;
+  --gold-dim: #D4800A;
+  --teal: #30D158;
+  --red: #FF3B30;
+  --blue: #0A84FF;
+  --purple: #BF5AF2;
+  --green: #30D158;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  /* Content max width */
+  --max-w: 1200px;
+  --nav-h: 56px;
+  --header-h: 54px;
+}
+
+.dark {
+  --bg: #000000;
+  --surf: #1C1C1E;
+  --surf2: #2C2C2E;
+  --surf3: rgba(28,28,30,0.85);
+  --border: rgba(255,255,255,0.08);
+  --border2: rgba(255,255,255,0.12);
+  --text: #FFFFFF;
+  --text-muted: #AEAEB2;
+  --text-dim: #636366;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
+}
+
+/* ============ RESET ============ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+input, button, select, textarea { font-family: inherit; }
+img { max-width: 100%; height: auto; display: block; }
+a { text-decoration: none; color: inherit; }
+::-webkit-scrollbar { width: 0; height: 0; }
+
+/* ============ LAYOUT ============ */
+/* Page wrapper — accounts for sticky header + fixed bottom nav */
+.page-body {
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
+  min-height: 100vh;
+}
+
+/* Content container — responsive padding and max width */
+.container {
+  width: 100%;
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 16px 16px;
+}
+
+/* Desktop: wider padding, side-by-side layout */
+@media (min-width: 768px) {
+  .container { padding: 24px 32px; }
+  /* On desktop, main content next to sidebar */
+  .page-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    align-items: start;
+  }
+}
+@media (min-width: 1024px) {
+  .container { padding: 24px 48px; }
+}
+@media (min-width: 1280px) {
+  .container { padding: 24px 64px; }
+}
+
+/* ============ NAVBAR ============ */
+/* Desktop: bottom nav becomes side nav */
+@media (min-width: 768px) {
+  .bnav {
+    max-width: 800px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    border-left: 0.5px solid var(--border) !important;
+    border-right: 0.5px solid var(--border) !important;
+    border-radius: 0 !important;
+  }
+}
+
+/* ============ CARDS ============ */
+.card {
+  background: var(--surf);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s, box-shadow 0.2s;
+  overflow: hidden;
+}
+.card:hover { box-shadow: var(--shadow-md); }
+.card:active { transform: scale(0.99); }
+
+/* ============ GRIDS ============ */
+/* Stats grid — 3 cols mobile, 4+ desktop */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+@media (min-width: 600px) {
+  .stats-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 900px) {
+  .stats-grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+/* Deals grid — 1 col mobile, 2 col tablet, 3 col desktop */
+.deals-grid-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+@media (min-width: 600px) {
+  .deals-grid-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 900px) {
+  .deals-grid-cards { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Compare results — 1 col mobile, 2 col desktop */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 768px) {
+  .compare-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Quick actions — 3 cols mobile, 6 cols desktop */
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+@media (min-width: 600px) {
+  .actions-grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+/* ============ TYPOGRAPHY ============ */
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+@media (min-width: 768px) {
+  .page-title { font-size: 28px; }
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* ============ FORMS ============ */
+.input {
+  width: 100%;
+  background: var(--surf);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: var(--text);
+  font-size: 16px; /* prevents iOS zoom */
+  outline: none;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.input:focus { box-shadow: 0 0 0 3px rgba(255,159,10,0.2), var(--shadow-sm); }
+.input::placeholder { color: var(--text-dim); }
+select.input { cursor: pointer; }
+
+@media (min-width: 768px) {
+  .input { font-size: 15px; }
+}
+
+/* ============ BUTTONS ============ */
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 12px 22px;
+  cursor: pointer;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+  box-shadow: 0 2px 8px rgba(255,159,10,0.35);
+  transition: all 0.2s;
+  touch-action: manipulation;
+  min-height: 44px;
+}
+.btn-gold:hover { box-shadow: 0 4px 16px rgba(255,159,10,0.45); transform: translateY(-1px); }
+.btn-gold:active { transform: scale(0.97); box-shadow: none; }
+
+.btn-ghost {
+  background: var(--surf2);
+  border: none;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 12px 22px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.2s;
+  touch-action: manipulation;
+  min-height: 44px;
+}
+.btn-ghost:hover { background: var(--border); }
+.btn-ghost:active { transform: scale(0.97); }
+
+/* Touch targets */
+button, a, [role="button"] { min-height: 36px; touch-action: manipulation; }
+
+/* ============ PILLS ============ */
+.pill {
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.pill-gold { background: rgba(255,159,10,0.12); color: var(--gold); }
+.pill-teal { background: rgba(48,209,88,0.12); color: var(--teal); }
+.pill-red  { background: rgba(255,59,48,0.12);  color: var(--red); }
+
+/* Freshness */
+.fresh-0 { background: rgba(48,209,88,0.12);  color: #30D158; }
+.fresh-1 { background: rgba(48,209,88,0.08);  color: #25A244; }
+.fresh-2 { background: rgba(255,159,10,0.12); color: var(--gold); }
+.fresh-3 { background: rgba(255,159,10,0.08); color: #CC7D08; }
+.fresh-4 { background: rgba(255,59,48,0.1);   color: var(--red); }
+
+/* ============ SCROLLABLE ROWS ============ */
+.pills-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.pills-row::-webkit-scrollbar { display: none; }
+
+/* ============ iOS GROUP LIST ============ */
+.ios-group {
+  background: var(--surf);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.ios-row {
+  display: flex;
+  align-items: center;
+  padding: 13px 16px;
+  border-bottom: 0.5px solid var(--border);
+  gap: 12px;
+}
+.ios-row:last-child { border-bottom: none; }
+
+/* ============ SECTION SPACING ============ */
+.section { margin-bottom: 24px; }
+@media (min-width: 768px) { .section { margin-bottom: 32px; } }
+
+/* ============ RESPONSIVE HEADER ============ */
+@media (min-width: 768px) {
+  /* On desktop, show tagline next to logo */
+  .nb-tagline { display: block !important; }
+  /* Wider search bar */
+  .nb-search { max-width: 480px; }
+}
+
+/* ============ EMPTY STATES ============ */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+.empty-state-icon { font-size: 44px; margin-bottom: 12px; }
+.empty-state-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.empty-state-sub { font-size: 13px; color: var(--text-muted); }
+
+/* ============ MODAL / SHEET ============ */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+@media (min-width: 768px) {
+  /* On desktop, modals are centered */
+  .sheet-overlay { align-items: center; }
+  .sheet-content {
+    border-radius: 20px !important;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+}
+.sheet-content {
+  background: var(--surf);
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 8px 20px 40px;
+}
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--border2);
+  border-radius: 2px;
+  margin: 10px auto 20px;
+}
+@media (min-width: 768px) { .sheet-handle { display: none; } }

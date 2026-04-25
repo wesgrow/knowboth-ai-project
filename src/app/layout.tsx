@@ -45,12 +45,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <PWAInstall />
         </ThemeProvider>
-        <Toaster position="bottom-center" toastOptions={{
-          style: {
-            background: "var(--surf)", color: "var(--text)",
-            border: "1px solid var(--border2)", fontSize: "13px",
-          },
-        }} />
+    <Toaster 
+  position="top-right"
+  toastOptions={{
+    duration: 2000,
+    style: {
+      background: "#fff",
+      color: "#1C1C1E",
+      border: "1px solid #F2F2F7",
+      fontSize: "13px",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+      borderRadius: "12px",
+      padding: "10px 14px",
+    },
+  }}
+/>
       </body>
     </html>
   );

@@ -2,7 +2,7 @@ import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC = ["/auth", "/_next", "/favicon"];
+const PUBLIC = ["/auth", "/_next", "/favicon", "/manifest", "/sw.js", "/icons"];
 
 export default async function proxy(req: NextRequest) {
   const res = NextResponse.next();
