@@ -11,6 +11,7 @@ const MORE_ITEMS = [
   { href:"/stock",     label:"Stock",     icon:"📦", color:"#30D158" },
   { href:"/expenses",  label:"Expenses",  icon:"📊", color:"#FF9F0A" },
   { href:"/analytics", label:"Analytics", icon:"📈", color:"#BF5AF2" },
+  { href:"/community", label:"Community", icon:"👥", color:"#FF3B30" },
   { href:"/chat",      label:"AI Chat",   icon:"🤖", color:"#0A84FF" },
 ];
 const TABS = [
@@ -106,30 +107,23 @@ export function Navbar() {
         .more-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;}
         .page-body{padding-bottom:72px;}
         @media(min-width:768px){.bnav{max-width:800px;left:50%;transform:translateX(-50%);border-left:0.5px solid rgba(0,0,0,0.1);border-right:0.5px solid rgba(0,0,0,0.1);}}
-      `}
-</style>
+      `}</style>
 
       <header className="nb">
-  <Link href="/home" className="nb-logo">
-    <div className="nb-logo-icon">✦</div>
-    <div>
-  <div className="nb-name">KNOWBOTH<b>.AI</b></div>
-  <div style={{fontSize:9,color:"#AEAEB2",letterSpacing:0,lineHeight:1}}>Know Your Savings. Know Your Spending.</div>
-</div>
-  </Link>
-
-  {/* This pushes actions to the right */}
-  <div style={{ flex: 1 }} />
-
-  <div className="nb-actions">
-    <button className="nb-btn" onClick={()=>{setShowLoc(!showLoc);setShowProfile(false);}}>📍</button>
-    <button className="nb-btn">💬<span className="nb-bdg">2</span></button>
-    <button className="nb-btn" onClick={()=>{setShowProfile(!showProfile);setShowLoc(false);}}>
-      {user.avatar}
-      {showProfile&&<div style={{position:"absolute",inset:0,borderRadius:"50%",boxShadow:"0 0 0 2px #FF9F0A"}}/>}
-    </button>
-  </div>
-</header>
+        <Link href="/home" className="nb-logo">
+          <div className="nb-logo-icon">✦</div>
+          <div className="nb-name">KNOWBOTH<b>.AI</b></div>
+          <div style={{fontSize:9,color:"#AEAEB2",letterSpacing:0,lineHeight:1,marginTop:1}}>Know Your Savings. Know Your Spending.</div>
+        </Link>
+        <div className="nb-actions">
+          <button className="nb-btn" onClick={()=>{setShowLoc(!showLoc);setShowProfile(false);}}>📍</button>
+          <button className="nb-btn">💬<span className="nb-bdg">2</span></button>
+          <button className="nb-btn" onClick={()=>{setShowProfile(!showProfile);setShowLoc(false);}}>
+            {user.avatar}
+            {showProfile&&<div style={{position:"absolute",inset:0,borderRadius:"50%",boxShadow:"0 0 0 2px #FF9F0A"}} />}
+          </button>
+        </div>
+      </header>
 
       {showLoc&&(
         <div className="loc-panel">

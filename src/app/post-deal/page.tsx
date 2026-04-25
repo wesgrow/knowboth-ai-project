@@ -68,6 +68,7 @@ export default function PostDealPage() {
   const [publishing, setPublishing] = useState(false);
   const [editingId, setEditingId] = useState<string|null>(null);
   const [showFlyer, setShowFlyer] = useState(true);
+  const [zoom, setZoom] = useState(1);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(()=>{ fetchBrands(); },[]);
@@ -211,23 +212,7 @@ export default function PostDealPage() {
     if(noName.length>0){toast.error(`${noName.length} items missing name`);setEditingId(noName[0].id);setStep("review");return;}
     const noPrice = items.filter(i=>i.price<=0);
     if(noPrice.length>0){toast.error(`${noPrice.length} items have $0 price`);setEditingId(noPrice[0].id);setStep("review");return;}
-// Check duplicates in same store
-const{data:existingDeals}=await supabase.from("deals").select("id").eq("brand_id",selectedBrand.id).eq("status","approved");
-if(existingDeals?.length){
-  const dealIds=existingDeals.map((d:any)=>d.id);
-  const normalizedNames=items.map(i=>(i.normalized_name||i.name.toLowerCase()).trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""));
-  const{data:existing}=await supabase.from("deal_items").select("normalized_name").in("deal_id",dealIds).in("normalized_name",normalizedNames);
-  if(existing?.length){
-    const dupes=existing.map((e:any)=>e.normalized_name);
-    const filtered=items.filter(i=>{const k=(i.normalized_name||i.name.toLowerCase()).trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");return!dupes.includes(k);});
-    if(filtered.length===0){toast.error("All items already exist for this store");setPublishing(false);return;}
-    toast(`⚠️ ${dupes.length} duplicate${dupes.length>1?"s":""} skipped`,{duration:3000});
-    setItems(filtered);
-  }
-}
-
-setPublishing(true);    
-setPublishing(true);
+    setPublishing(true);
     try{
       const{data:deal,error:de}=await supabase.from("deals").insert({
         brand_id:selectedBrand.id,status:"approved",applies_to_all_locations:locationMode==="all",
@@ -441,10 +426,18 @@ setPublishing(true);
                   </div>
                 </div>
                 <div style={{padding:12}}>
-                  {previews[activePreview]==="pdf"
-                    ?<div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:44,marginBottom:8}}>📄</div><div style={{fontSize:13,color:"#AEAEB2"}}>{files[activePreview]?.name}</div></div>
-                    :<img src={previews[activePreview]} alt="Flyer" style={{width:"100%",borderRadius:10,objectFit:"contain",maxHeight:600}}/>
-                  }
+                  <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,marginBottom:8}}>
+                    <button onClick={()=>setZoom(z=>Math.max(0.5,z-0.25))} style={{background:"#F2F2F7",border:"none",borderRadius:8,padding:"5px 14px",fontSize:16,cursor:"pointer",fontWeight:700,color:"#1C1C1E"}}>−</button>
+                    <span style={{fontSize:12,color:"#6D6D72",fontWeight:600}}>{Math.round(zoom*100)}%</span>
+                    <button onClick={()=>setZoom(z=>Math.min(3,z+0.25))} style={{background:"#F2F2F7",border:"none",borderRadius:8,padding:"5px 14px",fontSize:16,cursor:"pointer",fontWeight:700,color:"#1C1C1E"}}>+</button>
+                    <button onClick={()=>setZoom(1)} style={{background:"#F2F2F7",border:"none",borderRadius:8,padding:"4px 10px",fontSize:11,cursor:"pointer",color:"#6D6D72",fontWeight:600}}>Reset</button>
+                  </div>
+                  <div style={{overflow:"auto",maxHeight:560,borderRadius:10,cursor:zoom>1?"grab":"default"}}>
+                    {previews[activePreview]==="pdf"
+                      ?<div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:44,marginBottom:8}}>📄</div><div style={{fontSize:13,color:"#AEAEB2"}}>{files[activePreview]?.name}</div></div>
+                      :<img src={previews[activePreview]} alt="Flyer" style={{width:`${zoom*100}%`,minWidth:`${zoom*100}%`,borderRadius:10,display:"block",transition:"width 0.2s"}}/>
+                    }
+                  </div>
                 </div>
                 <div style={{padding:"8px 16px",background:"#F9F9F9",fontSize:11,color:"#AEAEB2",textAlign:"center"}}>
                   Tap items to edit while referencing the flyer
