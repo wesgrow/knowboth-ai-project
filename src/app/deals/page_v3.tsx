@@ -6,8 +6,10 @@ import { Navbar } from "@/components/Navbar";
 import { useAppStore } from "@/lib/store";
 import { getFreshness, STORE_COLORS } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
-const CATS = ["All","Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Meat & Fish","Household"];
+
+const CATS = ["Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household","Other"];
 const SORTS = [{v:"newest",l:"Newest"},{v:"price_asc",l:"Price ↑"},{v:"savings",l:"Savings"},{v:"expiring",l:"Expiring"}];
 type View = "list"|"table"|"cards";
 type Tab = "deals"|"compare";
@@ -41,7 +43,7 @@ function DealsContent() {
   const [cResults, setCResults] = useState<any[]>([]);
   const [cLoading, setCLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const { addToCart, cart } = useAppStore();
+  const router = useRouter();
 
   useEffect(()=>{ fetchDeals(); },[]);
 
@@ -80,7 +82,11 @@ function DealsContent() {
   }
 
   function dL(s:string|null){if(!s)return null;return Math.ceil((new Date(s).getTime()-Date.now())/86400000);}
-  function src(s:string|null){return s==="receipt"?"🧾":s==="flyer"?"📄":"✏️";}
+  function src(s:string|null){
+  if(s==="receipt") return "🧾 Receipt";
+  if(s==="flyer") return "📄 Flyer";
+  return "✏️ Manual";
+}
   function ago(ts:string){const m=Math.floor((Date.now()-new Date(ts).getTime())/60000);if(m<60)return`${m}m`;const h=Math.floor(m/60);if(h<24)return`${h}h`;return`${Math.floor(h/24)}d`;}
   function toB64(f:File):Promise<string>{return new Promise((r,j)=>{const rd=new FileReader();rd.onload=()=>r((rd.result as string).split(",")[1]);rd.onerror=j;rd.readAsDataURL(f);});}
 
@@ -147,9 +153,10 @@ function DealsContent() {
 
   // ─── VIEW COMPONENTS ───────────────────────────────────────
 
-  function ListRow({item}:{item:any}) {
-    const color=STORE_COLORS[item.brand?.slug]||"#FF9F0A";
-    const fr=getFreshness(item.created_at); const dl=dL(item.deal?.sale_end);
+ function ListRow({item}:{item:any}) {
+  const { cart, addToCart } = useAppStore(); // ADD THIS LINE
+  const color=STORE_COLORS[item.brand?.slug]||"#FF9F0A";
+   const fr=getFreshness(item.created_at); const dl=dL(item.deal?.sale_end);
     const inCart=!!cart.find(i=>i.id===item.id);
     const sav=item.regular_price?Math.round((1-item.price/item.regular_price)*100):null;
     return(
@@ -162,7 +169,7 @@ function DealsContent() {
             <span className={`pill fresh-${fr.level}`} style={{fontSize:9,padding:"1px 6px"}}>{fr.label}</span>
             {sav&&<span style={{fontSize:9,fontWeight:600,color:"#30D158"}}>-{sav}%</span>}
             {dl!==null&&dl<=3&&<span style={{fontSize:9,fontWeight:600,color:"#FF3B30"}}>⏰{dl===0?"Last day":`${dl}d`}</span>}
-            <span style={{fontSize:10,color:"#C8C8CC"}}>{src(item.source)} {ago(item.created_at)}</span>
+            <span style={{fontSize:10,color:"#C8C8CC"}}>{src(item.source)} · {ago(item.created_at)} ago</span>
           </div>
         </div>
         <div style={{textAlign:"right",flexShrink:0}}>
@@ -277,8 +284,19 @@ function DealsContent() {
 
         {/* ─── DEALS TAB ─── */}
         {tab==="deals"&&(
+
           <>
+
             {/* Toolbar */}
+<div style={{position:"relative",marginBottom:10}}>
+      <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",color:"#AEAEB2",fontSize:15}}>🔍</span>
+      <input
+        style={{width:"100%",background:"#fff",border:"none",borderRadius:12,padding:"12px 16px 12px 42px",fontSize:15,color:"#1C1C1E",outline:"none",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}
+        value={search}
+        onChange={e=>setSearch(e.target.value)}
+        placeholder="Search deals, items, stores..."
+      />
+    </div>
             <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10,flexWrap:"wrap" as const}}>
               {/* Filter */}
               <button onClick={()=>setShowPanel(!showPanel)} style={{display:"flex",alignItems:"center",gap:5,padding:"8px 14px",borderRadius:20,fontSize:13,fontWeight:600,cursor:"pointer",border:"none",background:showPanel||aF.length>0?"#FF9F0A":"#fff",color:showPanel||aF.length>0?"#fff":"#6D6D72",boxShadow:"0 1px 3px rgba(0,0,0,0.08)",whiteSpace:"nowrap" as const,flexShrink:0}}>
@@ -303,7 +321,7 @@ function DealsContent() {
                 {SORTS.map(s=><option key={s.v} value={s.v}>{s.l}</option>)}
               </select>
               {/* Post */}
-              <button onClick={()=>setShowUpload(!showUpload)} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap" as const,flexShrink:0,boxShadow:"0 2px 6px rgba(255,159,10,0.3)"}}>
+              <button onClick={()=>router.push("/post-deal")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap" as const,flexShrink:0,boxShadow:"0 2px 6px rgba(255,159,10,0.3)"}}>
                 📷 Post
               </button>
             </div>
