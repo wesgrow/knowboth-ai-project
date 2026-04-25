@@ -6,8 +6,10 @@ import { Navbar } from "@/components/Navbar";
 import { useAppStore } from "@/lib/store";
 import { getFreshness, STORE_COLORS } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
-const CATS = ["All","Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Meat & Fish","Household"];
+
+const CATS = ["Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household","Other"];
 const SORTS = [{v:"newest",l:"Newest"},{v:"price_asc",l:"Price ↑"},{v:"savings",l:"Savings"},{v:"expiring",l:"Expiring"}];
 type View = "list"|"table"|"cards";
 type Tab = "deals"|"compare";
@@ -41,7 +43,7 @@ function DealsContent() {
   const [cResults, setCResults] = useState<any[]>([]);
   const [cLoading, setCLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const { addToCart, cart } = useAppStore();
+  const router = useRouter();
 
   useEffect(()=>{ fetchDeals(); },[]);
 
@@ -151,9 +153,10 @@ function DealsContent() {
 
   // ─── VIEW COMPONENTS ───────────────────────────────────────
 
-  function ListRow({item}:{item:any}) {
-    const color=STORE_COLORS[item.brand?.slug]||"#FF9F0A";
-    const fr=getFreshness(item.created_at); const dl=dL(item.deal?.sale_end);
+ function ListRow({item}:{item:any}) {
+  const { cart, addToCart } = useAppStore(); // ADD THIS LINE
+  const color=STORE_COLORS[item.brand?.slug]||"#FF9F0A";
+   const fr=getFreshness(item.created_at); const dl=dL(item.deal?.sale_end);
     const inCart=!!cart.find(i=>i.id===item.id);
     const sav=item.regular_price?Math.round((1-item.price/item.regular_price)*100):null;
     return(
@@ -318,7 +321,7 @@ function DealsContent() {
                 {SORTS.map(s=><option key={s.v} value={s.v}>{s.l}</option>)}
               </select>
               {/* Post */}
-              <button onClick={()=>setShowUpload(!showUpload)} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap" as const,flexShrink:0,boxShadow:"0 2px 6px rgba(255,159,10,0.3)"}}>
+              <button onClick={()=>router.push("/post-deal")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap" as const,flexShrink:0,boxShadow:"0 2px 6px rgba(255,159,10,0.3)"}}>
                 📷 Post
               </button>
             </div>
