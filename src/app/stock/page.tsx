@@ -43,13 +43,15 @@ interface PurchaseHistory {
 
 export default function StockPage() {
   const router = useRouter();
-  const { user } = useAppStore();
+  const { user, addToCart, cart } = useAppStore();
   const [tab, setTab] = useState<"inventory"|"history">("inventory");
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [historyItems, setHistoryItems] = useState<PurchaseHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string|null>(null);
   const [search, setSearch] = useState("");
+  const [restockItem, setRestockItem] = useState<StockItem|null>(null);
+  const [restockQty, setRestockQty] = useState(1);
   const [catFilter, setCatFilter] = useState("All");
 
   const fmt = (n: number) => new Intl.NumberFormat("en-US",{style:"currency",currency:user?.currency||"USD"}).format(n);
@@ -235,6 +237,10 @@ export default function StockPage() {
                         <div style={{fontSize:15,fontWeight:700,color:"#FF9F0A"}}>{fmt(item.price)}<span style={{fontSize:10,color:"#AEAEB2",fontWeight:400}}>/{item.unit}</span></div>
                         <div style={{fontSize:11,color:"#6D6D72",marginTop:1}}>qty: {item.quantity}</div>
                       </div>
+                      <div style={{display:"flex",flexDirection:"column" as const,gap:4,flexShrink:0}}>
+                        <button onClick={()=>{setRestockItem(item);setRestockQty(1);}} style={{background:"rgba(255,159,10,0.1)",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:600,color:"#FF9F0A",cursor:"pointer",whiteSpace:"nowrap" as const}}>🔄 Restock</button>
+                        <button onClick={()=>{if(confirm(`Remove ${item.name} from stock?`)){setStockItems(prev=>prev.filter(i=>i.id!==item.id));toast.success(`${item.name} removed`);}}} style={{background:"rgba(255,59,48,0.08)",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:600,color:"#FF3B30",cursor:"pointer",whiteSpace:"nowrap" as const}}>✕ Remove</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -281,6 +287,37 @@ export default function StockPage() {
           </>
         )}
       </div>
+      {/* Restock Modal */}
+      {restockItem&&(
+        <div onClick={e=>{if(e.target===e.currentTarget)setRestockItem(null);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+          <div style={{background:"#fff",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480}}>
+            <div style={{fontSize:16,fontWeight:700,color:"#1C1C1E",marginBottom:4}}>🔄 Restock</div>
+            <div style={{fontSize:13,color:"#6D6D72",marginBottom:4}}>{restockItem.name}</div>
+            <div style={{fontSize:12,color:"#AEAEB2",marginBottom:20}}>{restockItem.store_name} · {fmt(restockItem.price)}/{restockItem.unit}</div>
+            <div style={{fontSize:10,fontWeight:600,color:"#AEAEB2",letterSpacing:0.5,marginBottom:8}}>QUANTITY TO ORDER</div>
+            <div style={{display:"flex",alignItems:"center",gap:16,background:"#F2F2F7",borderRadius:12,padding:"12px 16px",marginBottom:20}}>
+              <button onClick={()=>setRestockQty(q=>Math.max(1,q-1))} style={{width:36,height:36,borderRadius:8,border:"none",background:"#fff",fontSize:18,cursor:"pointer",fontWeight:700,color:"#1C1C1E",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>−</button>
+              <span style={{flex:1,textAlign:"center",fontSize:28,fontWeight:900,color:"#FF9F0A"}}>{restockQty}</span>
+              <button onClick={()=>setRestockQty(q=>q+1)} style={{width:36,height:36,borderRadius:8,border:"none",background:"#fff",fontSize:18,cursor:"pointer",fontWeight:700,color:"#1C1C1E",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>+</button>
+            </div>
+            <div style={{fontSize:13,color:"#6D6D72",marginBottom:16,textAlign:"center"}}>Est. cost: {fmt(restockItem.price*restockQty)}</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setRestockItem(null)} style={{flex:1,padding:"12px",background:"#F2F2F7",border:"none",borderRadius:12,fontSize:14,fontWeight:600,color:"#6D6D72",cursor:"pointer"}}>Cancel</button>
+              <button onClick={()=>{
+                const inCart=cart.find((c:any)=>c.id===restockItem.id);
+                if(inCart){toast("Already in cart");setRestockItem(null);return;}
+                for(let i=0;i<restockQty;i++){
+                  addToCart({id:`restock-${restockItem.id}-${Date.now()}`, name:restockItem.name,price:restockItem.price,unit:restockItem.unit,store:restockItem.store_name,store_slug:"",category:restockItem.category,icon:"🛒"});
+                }
+                toast.success(`✦ ${restockQty}x ${restockItem.name} added to cart`);
+                setRestockItem(null);
+              }} style={{flex:2,padding:"12px",background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
+                🛒 Add to Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
