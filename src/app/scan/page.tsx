@@ -164,7 +164,7 @@ export default function ScanPage() {
       // 4. Save price history (crowdsourced, anonymous)
       if (sharePrices && result.store_name) {
         const priceHistoryItems = items
-          .filter(i => i.price > 0 && i.name.trim())
+          .filter(i => i.unit_price > 0 && i.name.trim())
           .map(i => ({
             normalized_name: i.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""),
             item_name: i.name.trim(),
