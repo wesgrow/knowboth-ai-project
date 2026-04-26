@@ -1,38 +1,133 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { useAppStore } from "@/lib/store";
-import { CAT_ICONS } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { supabaseAuth } from "@/lib/supabase";
+import toast from "react-hot-toast";
 
-const DEMO_BILLS = [
-  { store: "Patel Brothers", cat: "Grocery", date: "2026-04-19", amount: 46.43, saved: 4.70, status: "saved", pts: 37 },
-  { store: "Shell Gas", cat: "Gas", date: "2026-04-17", amount: 52.00, saved: 0, status: "even", pts: 12 },
-  { store: "Biryani House", cat: "Restaurant", date: "2026-04-15", amount: 34.00, saved: -4.50, status: "overpaid", pts: 8 },
-  { store: "CVS Pharmacy", cat: "Pharmacy", date: "2026-04-12", amount: 28.50, saved: -3.20, status: "overpaid", pts: 18 },
-  { store: "India Bazaar", cat: "Grocery", date: "2026-04-10", amount: 38.20, saved: 6.40, status: "saved", pts: 29 },
-  { store: "Patel Brothers", cat: "Grocery", date: "2026-03-28", amount: 52.10, saved: 5.20, status: "saved", pts: 31 },
-  { store: "Walmart", cat: "Household", date: "2026-03-22", amount: 78.40, saved: -2.10, status: "overpaid", pts: 10 },
-  { store: "Shell Gas", cat: "Gas", date: "2026-03-15", amount: 49.00, saved: 0, status: "even", pts: 8 },
-];
+const CAT_ICONS: Record<string,string> = {
+  Grocery:"🛒", Vegetables:"🥦", Fruits:"🍎", Dairy:"🥛",
+  "Rice & Grains":"🌾", "Lentils & Dals":"🫘", Spices:"🌶️",
+  Snacks:"🍿", Beverages:"🧃", "Oils & Ghee":"🫙", Frozen:"❄️",
+  "Meat & Fish":"🍗", Bakery:"🍞", Gas:"⛽", Restaurant:"🍽️",
+  Pharmacy:"💊", Household:"🏠", Electronics:"💻", Other:"📦",
+};
 
 const PRESETS = [
-  { label: "Today", days: 0 },
-  { label: "7 days", days: 7 },
-  { label: "30 days", days: 30 },
-  { label: "90 days", days: 90 },
-  { label: "All time", days: -1 },
+  {label:"Today",days:0},{label:"7 days",days:7},
+  {label:"30 days",days:30},{label:"90 days",days:90},{label:"All time",days:-1},
 ];
 
+interface Expense {
+  id: string;
+  store_name: string;
+  store_city: string;
+  purchase_date: string;
+  currency: string;
+  total: number;
+  items_count: number;
+  source: string;
+  created_at: string;
+  items?: ExpenseItem[];
+}
+
+interface ExpenseItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  unit: string;
+  category: string;
+}
+
 export default function ExpensesPage() {
+  const router = useRouter();
   const { user } = useAppStore();
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string|null>(null);
   const [filterCat, setFilterCat] = useState("All");
-  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterStore, setFilterStore] = useState("All");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [showDateFilter, setShowDateFilter] = useState(false);
-  const [bills] = useState(DEMO_BILLS);
+  const [expandedId, setExpandedId] = useState<string|null>(null);
+  const [expandedItems, setExpandedItems] = useState<Record<string,ExpenseItem[]>>({});
+  const [loadingItems, setLoadingItems] = useState<string|null>(null);
+  const [deletingId, setDeletingId] = useState<string|null>(null);
   const currency = user?.currency || "USD";
-  const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
+
+  const fmt = (n: number) => new Intl.NumberFormat("en-US",{style:"currency",currency}).format(n);
+
+  const fetchExpenses = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data:{ session }, error:authError } = await supabaseAuth.auth.getSession();
+      if (authError) throw new Error(`Auth error: ${authError.message}`);
+      if (!session?.user?.id) {
+        router.push("/auth");
+        return;
+      }
+
+      let query = supabase
+        .from("expenses")
+        .select("id,store_name,store_city,purchase_date,currency,total,items_count,source,created_at")
+        .eq("user_id", session.user.id)
+        .order("purchase_date", { ascending: false });
+
+      if (dateFrom) query = query.gte("purchase_date", dateFrom);
+      if (dateTo) query = query.lte("purchase_date", dateTo);
+
+      const { data, error: fetchError } = await query;
+      if (fetchError) throw new Error(`Failed to load expenses: ${fetchError.message}`);
+      setExpenses(data || []);
+    } catch (e: any) {
+      console.error("Expenses fetch error:", e);
+      setError(e.message || "Failed to load expenses");
+      toast.error(e.message || "Failed to load expenses");
+    } finally {
+      setLoading(false);
+    }
+  }, [dateFrom, dateTo, router]);
+
+  useEffect(() => { fetchExpenses(); }, [fetchExpenses]);
+
+  async function loadItems(expenseId: string) {
+    if (expandedId === expenseId) { setExpandedId(null); return; }
+    setExpandedId(expenseId);
+    if (expandedItems[expenseId]) return; // already loaded
+    setLoadingItems(expenseId);
+    try {
+      const { data, error } = await supabase
+        .from("expense_items")
+        .select("id,name,price,quantity,unit,category")
+        .eq("expense_id", expenseId)
+        .order("category");
+      if (error) throw new Error(error.message);
+      setExpandedItems(prev => ({ ...prev, [expenseId]: data || [] }));
+    } catch (e: any) {
+      toast.error(`Failed to load items: ${e.message}`);
+    } finally {
+      setLoadingItems(null);
+    }
+  }
+
+  async function deleteExpense(id: string) {
+    if (!confirm("Delete this bill? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      const { error } = await supabase.from("expenses").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setExpenses(prev => prev.filter(e => e.id !== id));
+      toast.success("Bill deleted");
+    } catch (e: any) {
+      toast.error(`Delete failed: ${e.message}`);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   function applyPreset(days: number) {
     if (days === -1) { setDateFrom(""); setDateTo(""); return; }
@@ -43,184 +138,220 @@ export default function ExpensesPage() {
     setDateTo(to.toISOString().split("T")[0]);
   }
 
-  const filtered = bills.filter(b => {
-    const mc = filterCat === "All" || b.cat === filterCat;
-    const ms = filterStatus === "All" || b.status === filterStatus;
-    const bDate = new Date(b.date);
-    const mdf = !dateFrom || bDate >= new Date(dateFrom);
-    const mdt = !dateTo || bDate <= new Date(dateTo);
-    return mc && ms && mdf && mdt;
+  // Filter
+  const allStores = [...new Set(expenses.map(e => e.store_name))];
+  const filtered = expenses.filter(e => {
+    if (filterStore !== "All" && e.store_name !== filterStore) return false;
+    if (filterCat !== "All") {
+      const items = expandedItems[e.id];
+      if (items && !items.some(i => i.category === filterCat)) return false;
+    }
+    return true;
   });
 
-  const total = filtered.reduce((s, b) => s + b.amount, 0);
-  const saved = filtered.filter(b => b.status === "saved").reduce((s, b) => s + b.saved, 0);
-  const overpaid = filtered.filter(b => b.status === "overpaid").reduce((s, b) => s + Math.abs(b.saved), 0);
+  // Stats
+  const totalSpent = filtered.reduce((s,e) => s + Number(e.total), 0);
+  const avgBill = filtered.length > 0 ? totalSpent / filtered.length : 0;
+  const thisMonth = filtered.filter(e => {
+    const d = new Date(e.purchase_date);
+    const now = new Date();
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).reduce((s,e) => s + Number(e.total), 0);
 
-  const cats = [...new Set(bills.map(b => b.cat))];
-  const catTotals: Record<string, number> = {};
-  filtered.forEach(b => { catTotals[b.cat] = (catTotals[b.cat] || 0) + b.amount; });
+  // Category breakdown from all loaded items
+  const catTotals: Record<string,number> = {};
+  Object.values(expandedItems).flat().forEach(item => {
+    catTotals[item.category] = (catTotals[item.category] || 0) + (item.price * item.quantity);
+  });
   const maxCat = Math.max(...Object.values(catTotals), 1);
 
-  const activeFilters = [
-    filterCat !== "All" && filterCat,
-    filterStatus !== "All" && filterStatus,
-    (dateFrom || dateTo) && `${dateFrom || "..."} → ${dateTo || "..."}`,
-  ].filter(Boolean);
+  function sourceIcon(source: string) {
+    return source === "receipt" ? "🧾" : source === "manual" ? "✏️" : "📄";
+  }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }} className="page-body">
+    <div style={{minHeight:"100vh",background:"#F2F2F7"}} className="page-body">
       <Navbar />
       <div className="container">
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, color: "var(--text)" }}>Expenses</h1>
-          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Track every bill by category</p>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+          <div>
+            <h1 style={{fontSize:22,fontWeight:700,color:"#1C1C1E",letterSpacing:-0.5}}>Expenses</h1>
+            <p style={{fontSize:13,color:"#6D6D72",marginTop:3}}>Track every bill · Scan to add</p>
+          </div>
+          <button onClick={()=>router.push("/scan")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:"0 2px 8px rgba(255,159,10,0.3)"}}>
+            🧾 Scan Bill
+          </button>
         </div>
 
         {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 20 }}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
           {[
-            { l: "Spent", v: fmt(total), c: "var(--gold)" },
-            { l: "Saved", v: fmt(Math.max(0, saved)), c: "var(--teal)" },
-            { l: "Overpaid", v: fmt(overpaid), c: "var(--red)" },
-          ].map(s => (
-            <div key={s.l} style={{ background: "var(--surf)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 12px" }}>
-              <div style={{ fontSize: 16, fontWeight: 900, color: s.c, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.v}</div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{s.l}</div>
+            {l:"Total Spent",v:fmt(totalSpent),c:"#FF9F0A",i:"💰"},
+            {l:"This Month",v:fmt(thisMonth),c:"#0A84FF",i:"📅"},
+            {l:"Avg Bill",v:fmt(avgBill),c:"#30D158",i:"📊"},
+          ].map(s=>(
+            <div key={s.l} style={{background:"#fff",borderRadius:14,padding:"12px",textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+              <div style={{fontSize:18}}>{s.i}</div>
+              <div style={{fontSize:16,fontWeight:800,color:s.c,marginTop:4,letterSpacing:-0.5}}>{s.v}</div>
+              <div style={{fontSize:10,color:"#AEAEB2",marginTop:2}}>{s.l}</div>
             </div>
           ))}
+        </div>
+
+        {/* Date presets */}
+        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>
+          {PRESETS.map(p=>(
+            <button key={p.label} onClick={()=>applyPreset(p.days)} style={{padding:"6px 14px",borderRadius:20,fontSize:12,fontWeight:600,border:"none",background:"#fff",color:"#6D6D72",cursor:"pointer",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+              {p.label}
+            </button>
+          ))}
+          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{background:"#fff",border:"none",borderRadius:10,padding:"6px 10px",fontSize:12,color:"#1C1C1E",outline:"none",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}/>
+          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{background:"#fff",border:"none",borderRadius:10,padding:"6px 10px",fontSize:12,color:"#1C1C1E",outline:"none",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}/>
         </div>
 
         {/* Filters */}
-        <div style={{ background: "var(--surf)", border: "1px solid var(--border)", borderRadius: 12, padding: 12, marginBottom: 16 }}>
-          {/* Category filter */}
-          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: 1.2, marginBottom: 6 }}>CATEGORY</div>
-          <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 12, paddingBottom: 2 }}>
-            {["All", ...cats].map(c => (
-              <button key={c} onClick={() => setFilterCat(c)} style={{
-                borderRadius: 20, padding: "5px 12px", fontSize: 11, fontWeight: 700,
-                cursor: "pointer", whiteSpace: "nowrap", border: "none",
-                background: filterCat === c ? "rgba(245,166,35,0.12)" : "var(--surf2)",
-                color: filterCat === c ? "var(--gold)" : "var(--text-muted)",
-                outline: filterCat === c ? "1px solid rgba(245,166,35,0.35)" : "1px solid var(--border)",
-              }}>{c}</button>
-            ))}
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          <select value={filterStore} onChange={e=>setFilterStore(e.target.value)} style={{flex:1,background:"#fff",border:"none",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#1C1C1E",outline:"none",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+            <option value="All">All Stores</option>
+            {allStores.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+          <div style={{fontSize:12,color:"#AEAEB2",padding:"9px 12px",background:"#fff",borderRadius:10,boxShadow:"0 1px 3px rgba(0,0,0,0.06)",whiteSpace:"nowrap"}}>
+            {filtered.length} bill{filtered.length!==1?"s":""}
           </div>
-
-          {/* Status filter */}
-          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: 1.2, marginBottom: 6 }}>STATUS</div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-            {["All", "saved", "even", "overpaid"].map(s => (
-              <button key={s} onClick={() => setFilterStatus(s)} style={{
-                borderRadius: 20, padding: "5px 12px", fontSize: 11, fontWeight: 700,
-                cursor: "pointer", whiteSpace: "nowrap", border: "none",
-                background: filterStatus === s ? "rgba(245,166,35,0.12)" : "var(--surf2)",
-                color: filterStatus === s ? "var(--gold)" : "var(--text-muted)",
-                outline: filterStatus === s ? "1px solid rgba(245,166,35,0.35)" : "1px solid var(--border)",
-                textTransform: "capitalize" as const,
-              }}>{s}</button>
-            ))}
-          </div>
-
-          {/* Date Range */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: 1.2 }}>DATE RANGE</div>
-            <button onClick={() => setShowDateFilter(!showDateFilter)} style={{
-              background: "none", border: "none", fontSize: 11,
-              color: "var(--gold)", cursor: "pointer", fontWeight: 700,
-            }}>
-              {showDateFilter ? "▲ Hide" : "▼ Expand"}
-            </button>
-          </div>
-
-          {/* Preset buttons */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: showDateFilter ? 10 : 0 }}>
-            {PRESETS.map(p => (
-              <button key={p.label} onClick={() => applyPreset(p.days)} style={{
-                borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700,
-                cursor: "pointer", border: "none",
-                background: "var(--surf2)", color: "var(--text-muted)",
-                outline: "1px solid var(--border)",
-              }}>{p.label}</button>
-            ))}
-          </div>
-
-          {/* Custom date inputs */}
-          {showDateFilter && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
-              <div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 700, marginBottom: 4 }}>FROM</div>
-                <input type="date" className="input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: 13 }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 700, marginBottom: 4 }}>TO</div>
-                <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 13 }} />
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Active filters */}
-        {activeFilters.length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Filters:</span>
-            {activeFilters.map((f, i) => (
-              <span key={i} className="pill pill-gold" style={{ fontSize: 10 }}>{f as string}</span>
-            ))}
-            <button onClick={() => { setFilterCat("All"); setFilterStatus("All"); setDateFrom(""); setDateTo(""); }}
-              style={{ background: "none", border: "none", fontSize: 11, color: "var(--red)", cursor: "pointer", fontWeight: 700 }}>
-              Clear all
-            </button>
+        {/* Error state */}
+        {error&&(
+          <div style={{background:"rgba(255,59,48,0.08)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:13,color:"#FF3B30"}}>⚠️ {error}</span>
+            <button onClick={fetchExpenses} style={{background:"#FF3B30",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,color:"#fff",cursor:"pointer"}}>Retry</button>
           </div>
         )}
 
-        {/* Category breakdown */}
-        {Object.keys(catTotals).length > 0 && (
-          <>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", letterSpacing: 1, textTransform: "uppercase" as const, marginBottom: 10 }}>By Category</div>
-            <div style={{ background: "var(--surf)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", marginBottom: 20 }}>
-              {Object.entries(catTotals).map(([cat, amt]) => (
-                <div key={cat} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
-                  <span style={{ fontSize: 18, width: 28, textAlign: "center" }}>{CAT_ICONS[cat] || "🛒"}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{cat}</div>
-                    <div style={{ height: 6, background: "var(--surf2)", borderRadius: 3, overflow: "hidden", marginTop: 4 }}>
-                      <div style={{ height: "100%", borderRadius: 3, background: "linear-gradient(90deg,var(--gold),var(--gold-dim))", width: `${(amt / maxCat) * 100}%` }} />
+        {/* Loading */}
+        {loading&&(
+          <div style={{textAlign:"center",padding:"60px 0",color:"#AEAEB2"}}>
+            <div style={{fontSize:32,marginBottom:8}}>⏳</div>
+            Loading expenses...
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading&&!error&&expenses.length===0&&(
+          <div style={{textAlign:"center",padding:"60px 0"}}>
+            <div style={{fontSize:48,marginBottom:12}}>🧾</div>
+            <div style={{fontSize:16,fontWeight:600,color:"#1C1C1E",marginBottom:8}}>No bills yet</div>
+            <p style={{fontSize:13,color:"#AEAEB2",marginBottom:20}}>Scan your grocery receipts to track spending</p>
+            <button onClick={()=>router.push("/scan")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:12,padding:"12px 24px",fontSize:14,fontWeight:600,cursor:"pointer"}}>🧾 Scan First Bill</button>
+          </div>
+        )}
+
+        {/* Bills list */}
+        {!loading&&filtered.length>0&&(
+          <div style={{display:"flex",flexDirection:"column" as const,gap:10,marginBottom:20}}>
+            {filtered.map(expense=>{
+              const isExpanded = expandedId === expense.id;
+              const items = expandedItems[expense.id] || [];
+              const isLoading = loadingItems === expense.id;
+              const isDeleting = deletingId === expense.id;
+
+              return(
+                <div key={expense.id} style={{background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                  {/* Bill header */}
+                  <div onClick={()=>loadItems(expense.id)} style={{padding:"14px 16px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:12}}>
+                    <div style={{width:42,height:42,borderRadius:12,background:"rgba(255,159,10,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>
+                      {sourceIcon(expense.source)}
                     </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:15,fontWeight:700,color:"#1C1C1E",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{expense.store_name}</div>
+                      <div style={{fontSize:12,color:"#6D6D72",marginTop:2,display:"flex",gap:6,flexWrap:"wrap" as const}}>
+                        <span>📅 {expense.purchase_date}</span>
+                        {expense.store_city&&<span>📍 {expense.store_city}</span>}
+                        <span>🛍️ {expense.items_count} items</span>
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:18,fontWeight:900,color:"#FF9F0A"}}>{fmt(Number(expense.total))}</div>
+                      <div style={{fontSize:10,color:"#AEAEB2",marginTop:1}}>{expense.currency}</div>
+                    </div>
+                    <div style={{fontSize:16,color:"#AEAEB2",flexShrink:0,marginTop:4}}>{isExpanded?"▲":"▼"}</div>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", minWidth: 60, textAlign: "right" }}>{fmt(amt)}</div>
+
+                  {/* Expanded items */}
+                  {isExpanded&&(
+                    <div style={{borderTop:"0.5px solid #F2F2F7"}}>
+                      {isLoading&&<div style={{padding:"16px",textAlign:"center",color:"#AEAEB2",fontSize:13}}>Loading items...</div>}
+                      {!isLoading&&items.length===0&&<div style={{padding:"16px",textAlign:"center",color:"#AEAEB2",fontSize:13}}>No items found for this bill</div>}
+                      {!isLoading&&items.length>0&&(
+                        <>
+                          {/* Category summary */}
+                          <div style={{padding:"10px 16px",background:"#F9F9F9",borderBottom:"0.5px solid #F2F2F7"}}>
+                            <div style={{display:"flex",gap:6,flexWrap:"wrap" as const}}>
+                              {[...new Set(items.map(i=>i.category))].map(cat=>(
+                                <span key={cat} style={{fontSize:10,fontWeight:600,background:"rgba(255,159,10,0.1)",color:"#FF9F0A",borderRadius:20,padding:"2px 8px"}}>
+                                  {CAT_ICONS[cat]||"📦"} {cat} ({items.filter(i=>i.category===cat).length})
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Items */}
+                          {items.map((item,i)=>(
+                            <div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:i<items.length-1?"0.5px solid #F2F2F7":"none"}}>
+                              <div style={{fontSize:16,flexShrink:0}}>{CAT_ICONS[item.category]||"📦"}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:13,fontWeight:600,color:"#1C1C1E",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
+                                <div style={{fontSize:11,color:"#AEAEB2"}}>{item.category} · qty {item.quantity} {item.unit}</div>
+                              </div>
+                              <div style={{textAlign:"right",flexShrink:0}}>
+                                <div style={{fontSize:14,fontWeight:700,color:"#1C1C1E"}}>{fmt(item.price * item.quantity)}</div>
+                                {item.quantity>1&&<div style={{fontSize:10,color:"#AEAEB2"}}>{fmt(item.price)}/ea</div>}
+                              </div>
+                            </div>
+                          ))}
+                          {/* Total row */}
+                          <div style={{display:"flex",justifyContent:"space-between",padding:"10px 16px",background:"#F9F9F9",borderTop:"0.5px solid #F2F2F7"}}>
+                            <span style={{fontSize:13,fontWeight:600,color:"#6D6D72"}}>Items Total</span>
+                            <span style={{fontSize:14,fontWeight:800,color:"#FF9F0A"}}>{fmt(items.reduce((s,i)=>s+(i.price*i.quantity),0))}</span>
+                          </div>
+                        </>
+                      )}
+                      {/* Actions */}
+                      <div style={{display:"flex",gap:8,padding:"10px 16px",borderTop:"0.5px solid #F2F2F7"}}>
+                        <button onClick={e=>{e.stopPropagation();deleteExpense(expense.id);}} disabled={isDeleting} style={{flex:1,padding:"8px",background:"rgba(255,59,48,0.08)",border:"none",borderRadius:10,fontSize:12,fontWeight:600,color:"#FF3B30",cursor:"pointer",opacity:isDeleting?0.5:1}}>
+                          {isDeleting?"Deleting...":"🗑️ Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Category breakdown (only if items loaded) */}
+        {Object.keys(catTotals).length>0&&(
+          <div style={{background:"#fff",borderRadius:16,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)",marginBottom:20}}>
+            <div style={{fontSize:14,fontWeight:600,color:"#1C1C1E",marginBottom:14}}>📊 Spending by Category</div>
+            <div style={{display:"flex",flexDirection:"column" as const,gap:10}}>
+              {Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>(
+                <div key={cat}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{fontSize:13,color:"#1C1C1E"}}>{CAT_ICONS[cat]||"📦"} {cat}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:"#FF9F0A"}}>{fmt(amt)}</span>
+                  </div>
+                  <div style={{height:6,background:"#F2F2F7",borderRadius:3,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${(amt/maxCat)*100}%`,background:"linear-gradient(90deg,#FF9F0A,#D4800A)",borderRadius:3,transition:"width 0.5s"}}/>
+                  </div>
                 </div>
               ))}
             </div>
-          </>
+            <p style={{fontSize:11,color:"#AEAEB2",marginTop:12,textAlign:"center"}}>Expand bills above to load category breakdown</p>
+          </div>
         )}
 
-        {/* Bill History */}
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", letterSpacing: 1, textTransform: "uppercase" as const, marginBottom: 10 }}>
-          Bill History ({filtered.length})
-        </div>
-        <div style={{ background: "var(--surf)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
-          {filtered.length === 0 && (
-            <div style={{ padding: "30px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
-              No bills match your filters
-            </div>
-          )}
-          {filtered.map((b, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: 22, width: 36, textAlign: "center" }}>{CAT_ICONS[b.cat] || "🛒"}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.store}</div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{b.date} · {b.cat}</div>
-              </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 900, color: "var(--gold)" }}>{fmt(b.amount)}</div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: b.status === "saved" ? "var(--teal)" : b.status === "even" ? "var(--gold)" : "var(--red)" }}>
-                  {b.status === "saved" ? `+${fmt(b.saved)} saved` : b.status === "even" ? "Average" : `−${fmt(Math.abs(b.saved))} overpaid`}
-                </div>
-                <div style={{ fontSize: 9, color: "var(--text-dim)" }}>+{b.pts} pts</div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

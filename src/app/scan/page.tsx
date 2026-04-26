@@ -66,6 +66,8 @@ export default function ScanPage() {
   const [zoom, setZoom] = useState(1);
   const [showBill, setShowBill] = useState(true);
   const [sharePrices, setSharePrices] = useState(true);
+  const [editTotal, setEditTotal] = useState(false);
+  const [manualTotal, setManualTotal] = useState<number|null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function handleFile(f: File) {
@@ -92,6 +94,7 @@ export default function ScanPage() {
       });
       extracted.sort((a,b) => a.confidence - b.confidence);
       setResult(data);
+      setManualTotal(data.total||0);
       setItems(extracted);
       setStep("review");
       const low = extracted.filter(i=>i.confidence<60).length;
@@ -247,12 +250,27 @@ export default function ScanPage() {
             <div>
               {/* Store info banner */}
               {result&&(
-                <div style={{background:"#fff",borderRadius:12,padding:"12px 16px",marginBottom:12,boxShadow:"0 1px 3px rgba(0,0,0,0.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:700,color:"#1C1C1E"}}>🏪 {result.store_name||"Unknown Store"}</div>
-                    <div style={{fontSize:11,color:"#AEAEB2"}}>{result.store_city} · {result.purchase_date} · {result.currency||"USD"}</div>
+                <div style={{background:"#fff",borderRadius:12,padding:"12px 16px",marginBottom:12,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:result.total_mismatch?8:0}}>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:700,color:"#1C1C1E"}}>🏪 {result.store_name||"Unknown Store"}</div>
+                      <div style={{fontSize:11,color:"#AEAEB2"}}>{result.store_city} · {result.purchase_date} · {result.currency||"USD"}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:11,color:"#AEAEB2",marginBottom:2}}>Receipt Total</div>
+                      {editTotal
+                        ?<input type="number" step="0.01" autoFocus style={{width:90,background:"#F2F2F7",border:"1px solid #FF9F0A",borderRadius:8,padding:"4px 8px",fontSize:16,fontWeight:900,color:"#FF9F0A",outline:"none",textAlign:"right"}} value={manualTotal||""} onChange={e=>setManualTotal(parseFloat(e.target.value)||0)} onBlur={()=>setEditTotal(false)}/>
+                        :<div onClick={()=>setEditTotal(true)} style={{fontSize:20,fontWeight:900,color:"#FF9F0A",cursor:"pointer"}} title="Tap to edit">${(manualTotal||total).toFixed(2)} ✏️</div>
+                      }
+                      <div style={{fontSize:10,color:"#AEAEB2"}}>Items: ${total.toFixed(2)}</div>
+                    </div>
                   </div>
-                  <div style={{fontSize:20,fontWeight:900,color:"#FF9F0A"}}>${total.toFixed(2)}</div>
+                  {result.total_mismatch&&(
+                    <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"rgba(255,159,10,0.08)",border:"1px solid rgba(255,159,10,0.25)",borderRadius:8,fontSize:12,color:"#FF9F0A",fontWeight:500}}>
+                      <span>💡</span>
+                      <span>Receipt total (${(manualTotal||result.total).toFixed(2)}) doesn't match items total (${total.toFixed(2)}). Some items may be missing or prices may be incorrect. Tap total to edit.</span>
+                    </div>
+                  )}
                 </div>
               )}
 
