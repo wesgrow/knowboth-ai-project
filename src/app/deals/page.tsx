@@ -16,10 +16,7 @@ type Tab = "deals"|"compare";
 function groupByItem(items: any[]) {
   const map: Record<string, any[]> = {};
   items.forEach(item => {
-    const key = (item.normalized_name || item.name?.toLowerCase() || "")
-  .trim()
-  .replace(/\s+/g, " ")
-  .replace(/[^a-z0-9 ]/g, "");
+    const key = item.normalized_name || item.name?.toLowerCase() || "";
     if (!map[key]) map[key] = [];
     map[key].push(item);
   });
@@ -75,17 +72,56 @@ function DealsContent() {
   async function doCompare(term?: string) {
     const q = term || cq; if (!q.trim()) return;
     setCLoading(true);
+    const normalizedQ = q.toLowerCase().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
+
+    // Search deal_items (posted deals)
     const { data: di } = await supabase.from("deal_items").select("id,name,price,regular_price,unit,category,created_at,deal_id,source").ilike("normalized_name", `%${q}%`).order("price", { ascending: true }).limit(10);
-    if (!di?.length) { setCResults([]); setCLoading(false); return; }
-    const dealIds = di.map((d: any) => d.deal_id);
-    const { data: deals } = await supabase.from("deals").select("id,sale_end,brand_id").in("id", dealIds).eq("status", "approved");
-    const aIds = new Set((deals || []).map((d: any) => d.id));
-    const filtered = di.filter((i: any) => aIds.has(i.deal_id));
-    const bIds = [...new Set((deals || []).map((d: any) => d.brand_id).filter(Boolean))];
-    const { data: brands } = await supabase.from("brands").select("id,name,slug").in("id", bIds as string[]);
-    const bMap: Record<string, any> = {}; (brands || []).forEach((b: any) => { bMap[b.id] = b; });
-    const dMap: Record<string, any> = {}; (deals || []).forEach((d: any) => { dMap[d.id] = d; });
-    setCResults(filtered.map((i: any) => ({ ...i, brand: bMap[dMap[i.deal_id]?.brand_id], deal: dMap[i.deal_id] })));
+
+    // Search price_history (from scanned bills — crowdsourced)
+    const { data: ph } = await supabase.from("price_history")
+      .select("id,item_name,store_name,store_city,price,unit,source,recorded_at")
+      .ilike("normalized_name", `%${normalizedQ}%`)
+      .order("recorded_at", { ascending: false }).limit(10);
+
+    let dealResults: any[] = [];
+    if (di?.length) {
+      const dealIds = di.map((d: any) => d.deal_id);
+      const { data: deals } = await supabase.from("deals").select("id,sale_end,brand_id").in("id", dealIds).eq("status", "approved");
+      const aIds = new Set((deals || []).map((d: any) => d.id));
+      const filtered = di.filter((i: any) => aIds.has(i.deal_id));
+      const bIds = [...new Set((deals || []).map((d: any) => d.brand_id).filter(Boolean))];
+      const { data: brands } = await supabase.from("brands").select("id,name,slug").in("id", bIds as string[]);
+      const bMap: Record<string, any> = {}; (brands || []).forEach((b: any) => { bMap[b.id] = b; });
+      const dMap: Record<string, any> = {}; (deals || []).forEach((d: any) => { dMap[d.id] = d; });
+      dealResults = filtered.map((i: any) => ({ ...i, brand: bMap[dMap[i.deal_id]?.brand_id], deal: dMap[i.deal_id], from_price_history: false }));
+    }
+
+    // Map price_history results
+    const phResults: any[] = (ph || []).map((p: any) => ({
+      id: `ph-${p.id}`,
+      name: p.item_name,
+      price: p.price,
+      regular_price: null,
+      unit: p.unit || "ea",
+      source: "receipt",
+      created_at: p.recorded_at,
+      brand: { name: p.store_name, slug: "" },
+      deal: null,
+      from_price_history: true,
+      store_city: p.store_city,
+    }));
+
+    // Merge and deduplicate by store name — prefer deal_items over price_history
+    const seen = new Set<string>();
+    const merged = [...dealResults, ...phResults].filter(item => {
+      const key = `${item.brand?.name}-${item.price}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).sort((a, b) => a.price - b.price);
+
+    if (merged.length === 0) { setCResults([]); setCLoading(false); return; }
+    setCResults(merged);
     setCLoading(false);
   }
 
