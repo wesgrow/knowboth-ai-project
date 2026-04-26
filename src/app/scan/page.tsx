@@ -183,7 +183,14 @@ export default function ScanPage() {
 
       // 5. Award points
       const pts = 5 + (items.length * 2);
-      addPoints(pts);
+      addPoints(pts); // Zustand
+      // Also save to Supabase
+      try {
+        const { data:prof } = await supabase.from("user_profiles").select("points").eq("user_id", userId).single();
+        const newPts = (prof?.points || 0) + pts;
+        await supabase.from("user_profiles").upsert({ user_id: userId, points: newPts, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+        setUser({ ...user!, points: newPts });
+      } catch(pe) { console.error("Points save error:", pe); }
 
       setSaved(true);
       setStep("confirm");
