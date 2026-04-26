@@ -36,7 +36,7 @@ export default function StockPage() {
   const low = stockItems.filter(p => p.qty <= 1).length;
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }} className="page-body">
+    <div style={{ minHeight: "100vh", background: "#F2F2F7", paddingBottom: 84 }} className="page-body">
       <Navbar />
       <div className="container">
 

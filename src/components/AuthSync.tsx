@@ -5,9 +5,9 @@ import { useAppStore } from "@/lib/store";
 
 function buildUser(session: any) {
   return {
-    name: session.user.user_metadata?.name ||
+    name: (session.user.user_metadata?.name ||
           session.user.user_metadata?.full_name ||
-          session.user.email?.split("@")[0] || "User",
+          session.user.email?.split("@")[0] || "User").split(" ")[0],
     avatar: "🧑‍🍳",
     currency: "USD",
     zip: "75074",

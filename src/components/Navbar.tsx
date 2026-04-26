@@ -64,9 +64,11 @@ export function Navbar() {
     <>
       <style>{`
         .nb{background:#fff;border-bottom:0.5px solid rgba(0,0,0,0.1);padding:0 14px;height:54px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:100;}
-        .nb-logo{display:flex;align-items:center;gap:7px;text-decoration:none;flex-shrink:0;}
+        .nb-logo{display:flex;align-items:center;gap:7px;text-decoration:none;flex-shrink:0;min-width:0;overflow:hidden;}
         .nb-logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#FF9F0A,#D4800A);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 6px rgba(255,159,10,0.3);}
         .nb-name{font-size:18px;font-weight:800;letter-spacing:-0.8px;color:#1C1C1E;white-space:nowrap;}
+        .nb-tagline{font-size:9px;color:#AEAEB2;line-height:1;margin-top:1px;white-space:nowrap;display:none;}
+        @media(min-width:480px){.nb-tagline{display:block;}}
         .nb-name b{color:#FF9F0A;}
         .nb-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}
         .nb-btn{width:36px;height:36px;border-radius:50%;background:#F2F2F7;border:none;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;position:relative;flex-shrink:0;}
@@ -112,8 +114,10 @@ export function Navbar() {
       <header className="nb">
         <Link href="/home" className="nb-logo">
           <div className="nb-logo-icon">✦</div>
-          <div className="nb-name">KNOWBOTH<b>.AI</b></div>
-          <div style={{fontSize:9,color:"#AEAEB2",letterSpacing:0,lineHeight:1,marginTop:1}}>Know Your Savings. Know Your Spending.</div>
+          <div>
+            <div className="nb-name">KNOWBOTH<b>.AI</b></div>
+            <div className="nb-tagline">Know Your Savings. Know Your Spending.</div>
+          </div>
         </Link>
         <div className="nb-actions">
           <button className="nb-btn" onClick={()=>{setShowLoc(!showLoc);setShowProfile(false);}}>📍</button>
