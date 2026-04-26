@@ -115,7 +115,7 @@ export default function ScanPage() {
   function removeItem(id: string) { setItems(prev => prev.filter(i => i.id !== id)); }
 
   function addItem() {
-    const newItem: BillItem = { id:`item-new-${Date.now()}`, name:"", price:0, quantity:1, unit:"ea", category:"Other", confidence:0 };
+    const newItem: BillItem = { id:`item-new-${Date.now()}`, name:"", unit_price:0, actual_price:0, quantity:1, unit:"ea", category:"Other", confidence:0 };
     setItems(prev => [...prev, newItem]);
     setEditingId(newItem.id);
   }
