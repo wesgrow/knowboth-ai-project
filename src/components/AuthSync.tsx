@@ -34,6 +34,7 @@ async function syncUserProfile(session: any) {
     avatar: profile?.avatar || "🧑‍🍳",
     currency: profile?.currency || "USD",
     city: profile?.city || "DFW",
+    zip: profile?.zip || "75074",
     theme: "light" as const,
     points: profile?.points || 0,
   };
