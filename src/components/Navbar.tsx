@@ -95,6 +95,8 @@ export function Navbar() {
     window.location.href="/auth";
   }
 
+  if (pathname === "/auth") return null;
+
   const allNavItems=[...NAV_MAIN,...NAV_MORE];
   const isActive=(href:string)=>pathname===href;
 

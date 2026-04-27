@@ -61,7 +61,7 @@ export default function AuthPage() {
   }
 
   return (
-    <div style={{minHeight:"100vh",background:"#F2F2F7",display:"flex",flexDirection:"column" as const,alignItems:"center",justifyContent:"center",padding:24}}>
+    <div className="auth-page" style={{minHeight:"100vh",background:"#F2F2F7",display:"flex",flexDirection:"column" as const,alignItems:"center",justifyContent:"center",padding:24}}>
 
       {/* Logo */}
       <div style={{textAlign:"center",marginBottom:36}}>

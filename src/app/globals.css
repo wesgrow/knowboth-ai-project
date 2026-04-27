@@ -138,6 +138,7 @@ input,select,textarea{font-family:inherit;}
   min-height:100vh;
   display:flex;flex-direction:column;
 }
+.main-content:has(.auth-page){margin-left:0;}
 
 /* ── TOP HEADER ── */
 .top-header{
