@@ -43,6 +43,7 @@ export function Navbar() {
   const level = getLevel(user?.points||0);
 
   useEffect(()=>{
+    if(window.innerWidth<=768) return;
     const mc = document.querySelector('.main-content') as HTMLElement;
     if(mc) mc.style.marginLeft = sidebarHidden ? '0' : (collapsed ? '52px' : 'var(--sidebar-w)');
   },[collapsed, sidebarHidden]);

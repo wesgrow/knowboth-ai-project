@@ -114,7 +114,7 @@ export default function HomePage() {
 
           {/* Welcome */}
           <div style={{marginBottom:20}}>
-            <div style={{fontSize:24,fontWeight:700,color:"var(--text)",letterSpacing:-0.6}}>
+            <div style={{fontSize:22,fontWeight:700,color:"var(--text)",letterSpacing:-0.6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
               Hi, {user?.name?.split(" ")[0]||"there"} {user?.avatar}
             </div>
             <div style={{fontSize:13,color:"var(--text2)",marginTop:3}}>
