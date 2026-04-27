@@ -1,204 +1,329 @@
 "use client";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { supabaseAuth } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import { getLevel } from "@/lib/utils";
 
-const RADII = [5,10,15,25,50];
-const MORE_ITEMS = [
-  { href:"/stock",     label:"Stock",     icon:"📦", color:"#30D158" },
-  { href:"/expenses",  label:"Expenses",  icon:"📊", color:"#FF9F0A" },
-  { href:"/analytics", label:"Analytics", icon:"📈", color:"#BF5AF2" },
-  { href:"/community", label:"Community", icon:"👥", color:"#FF3B30" },
-  { href:"/chat",      label:"AI Chat",   icon:"🤖", color:"#0A84FF" },
+const NAV_MAIN = [
+  { href:"/home",  icon:"🏠", label:"Home" },
+  { href:"/deals", icon:"🏷️", label:"Deals" },
+  { href:"/cart",  icon:"🛒", label:"Cart", badge:true },
+  { href:"/scan",  icon:"🧾", label:"Scan Bill" },
 ];
-const TABS = [
-  { href:"/home",  label:"Home",  icon:"🏠" },
-  { href:"/deals", label:"Deals", icon:"🛍️" },
-  { href:"/cart",  label:"Cart",  icon:"🛒", badge:true },
-  { href:"/scan",  label:"Scan",  icon:"🧾" },
-  { label:"More",  icon:"⋯",     more:true },
+const NAV_MORE = [
+  { href:"/stock",     icon:"📦", label:"Stock" },
+  { href:"/expenses",  icon:"📊", label:"Expenses" },
+  { href:"/analytics", icon:"📈", label:"Analytics" },
+  { href:"/community", icon:"👥", label:"Community" },
+  { href:"/chat",      icon:"🤖", label:"AI Chat" },
+];
+const BOTTOM_TABS = [
+  { href:"/home",  icon:"🏠", label:"Home" },
+  { href:"/deals", icon:"🏷️", label:"Deals" },
+  { scan:true },
+  { href:"/cart",  icon:"🛒", label:"Cart" },
+  { more:true },
 ];
 
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, updateLocation, updateTheme } = useAppStore();
-  const [showMore, setShowMore]       = useState(false);
-  const [showLoc, setShowLoc]         = useState(false);
+  const { user, setUser, cart } = useAppStore();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [locInput, setLocInput]       = useState(user?`${user.city||""} ${user.zip||""}`.trim():"");
-  const [radius, setRadius]           = useState((user as any)?.radius||15);
-  const [gpsLoading, setGpsLoading]   = useState(false);
-  const cart = useAppStore(s=>s.cart);
-  const pending = cart.filter(i=>!i.purchased).length;
-  if(!user) return null;
+  const [theme, setTheme] = useState<"light"|"dark">("light");
+  const profileRef = useRef<HTMLDivElement>(null);
+  const cartCount = cart?.filter((i:any)=>!i.purchased)?.length || 0;
+  const level = getLevel(user?.points||0);
 
-  function saveLocation() {
-    const parts=locInput.trim().split(/[\s,]+/);
-    const zip=parts.find(p=>/^\d{5}/.test(p))||user?.zip||"";
-    const city=parts.filter(p=>!/^\d/.test(p)).join(" ")||user?.city||"";
-    updateLocation(zip,city); setShowLoc(false);
+  useEffect(()=>{
+    const mc = document.querySelector('.main-content') as HTMLElement;
+    if(mc) mc.style.marginLeft = sidebarHidden ? '0' : (collapsed ? '52px' : 'var(--sidebar-w)');
+  },[collapsed, sidebarHidden]);
+
+  useEffect(()=>{
+    const saved = (localStorage.getItem("kb-theme")||"light") as "light"|"dark";
+    const savedCollapsed = localStorage.getItem("kb-collapsed")==="true";
+    const savedHidden = localStorage.getItem("kb-sidebar-hidden")==="true";
+    setCollapsed(savedCollapsed);
+    setSidebarHidden(savedHidden);
+    setTheme(saved);
+    document.documentElement.setAttribute("data-theme",saved);
+  },[]);
+
+  useEffect(()=>{
+    function handleClick(e: MouseEvent){
+      if(profileRef.current&&!profileRef.current.contains(e.target as Node)) setShowProfile(false);
+    }
+    document.addEventListener("mousedown",handleClick);
+    return()=>document.removeEventListener("mousedown",handleClick);
+  },[]);
+
+  async function toggleTheme(){
+    const next = theme==="light"?"dark":"light";
+    setTheme(next);
+    localStorage.setItem("kb-theme",next);
+    document.documentElement.setAttribute("data-theme",next);
+    try{
+      const{data:{session}}=await supabaseAuth.auth.getSession();
+      if(session?.user?.id){
+        await supabase.from("user_profiles").upsert({user_id:session.user.id,theme:next,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+      }
+    }catch(e){console.error("Theme save:",e);}
   }
 
-  function useGPS() {
-    if(!navigator.geolocation){alert("GPS not supported");return;}
-    setGpsLoading(true);
-    navigator.geolocation.getCurrentPosition(async pos=>{
-      try{
-        const{latitude,longitude}=pos.coords;
-        const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
-        const data=await res.json();
-        updateLocation(data.address?.postcode||"",data.address?.city||data.address?.town||"");
-        setLocInput(`${data.address?.city||""} ${data.address?.postcode||""}`.trim());
-      }catch{updateLocation("","Current Location");}
-      setGpsLoading(false); setShowLoc(false);
-    },()=>{alert("GPS denied");setGpsLoading(false);});
+  function toggleCollapse(){
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem("kb-collapsed", String(next));
   }
 
-  async function signOut(){ await supabaseAuth.auth.signOut(); window.location.href="/auth"; }
+  function toggleSidebarHidden(){
+    const next = !sidebarHidden;
+    setSidebarHidden(next);
+    localStorage.setItem("kb-sidebar-hidden", String(next));
+  }
+
+  async function logout(){
+    await supabaseAuth.auth.signOut();
+    window.location.href="/auth";
+  }
+
+  const allNavItems=[...NAV_MAIN,...NAV_MORE];
+  const isActive=(href:string)=>pathname===href;
 
   return(
     <>
-      <style>{`
-        .nb{background:#fff;border-bottom:0.5px solid rgba(0,0,0,0.1);padding:0 14px;height:54px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:100;}
-        .nb-logo{display:flex;align-items:center;gap:7px;text-decoration:none;flex-shrink:0;min-width:0;overflow:hidden;}
-        .nb-logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#FF9F0A,#D4800A);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 6px rgba(255,159,10,0.3);}
-        .nb-name{font-size:18px;font-weight:800;letter-spacing:-0.8px;color:#1C1C1E;white-space:nowrap;}
-        .nb-tagline{font-size:9px;color:#AEAEB2;line-height:1;margin-top:1px;white-space:nowrap;display:none;}
-        @media(min-width:480px){.nb-tagline{display:block;}}
-        .nb-name b{color:#FF9F0A;}
-        .nb-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}
-        .nb-btn{width:36px;height:36px;border-radius:50%;background:#F2F2F7;border:none;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;position:relative;flex-shrink:0;}
-        .nb-btn:active{background:#E5E5EA;}
-        .nb-bdg{position:absolute;top:1px;right:1px;background:#FF3B30;color:#fff;font-size:9px;font-weight:700;border-radius:8px;min-width:15px;height:15px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:1.5px solid #fff;}
-        .loc-panel{background:#fff;border-bottom:0.5px solid rgba(0,0,0,0.08);padding:10px 14px 14px;}
-        .loc-row{display:flex;gap:8px;margin-bottom:10px;}
-        .loc-input{flex:1;background:#F2F2F7;border:none;border-radius:10px;padding:10px 14px;font-size:14px;color:#1C1C1E;outline:none;}
-        .gps-btn{background:rgba(48,209,88,0.1);border:none;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:600;color:#30D158;cursor:pointer;}
-        .save-btn{background:linear-gradient(135deg,#FF9F0A,#D4800A);border:none;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;}
-        .r-row{display:flex;gap:6px;}
-        .r-pill{flex:1;padding:7px 4px;border-radius:10px;font-size:12px;font-weight:600;text-align:center;cursor:pointer;border:none;background:#F2F2F7;color:#6D6D72;}
-        .r-pill.on{background:rgba(255,159,10,0.12);color:#FF9F0A;box-shadow:0 0 0 1.5px #FF9F0A;}
-        .prof-overlay{position:fixed;inset:0;z-index:300;}
-        .prof-sheet{position:absolute;top:58px;right:14px;background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.15);width:220px;overflow:hidden;}
-        .prof-head{padding:14px 16px;border-bottom:0.5px solid #F2F2F7;display:flex;align-items:center;gap:10px;}
-        .prof-av{font-size:30px;}
-        .prof-name{font-size:15px;font-weight:700;color:#1C1C1E;letter-spacing:-0.3px;}
-        .prof-lvl{font-size:11px;color:#AEAEB2;margin-top:1px;}
-        .pmenu{display:flex;align-items:center;gap:10px;padding:12px 16px;border:none;background:#fff;width:100%;text-align:left;font-size:14px;font-weight:500;color:#1C1C1E;cursor:pointer;border-bottom:0.5px solid #F9F9F9;text-decoration:none;}
-        .pmenu:hover{background:#F9F9F9;}
-        .pmenu:last-child{border-bottom:none;}
-        .pmenu.red{color:#FF3B30;}
-        .picon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
-        .bnav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:0.5px solid rgba(0,0,0,0.1);display:flex;height:56px;z-index:100;}
-        .btab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:none;cursor:pointer;color:#AEAEB2;font-size:9px;font-weight:600;position:relative;text-transform:uppercase;letter-spacing:0.3px;text-decoration:none;}
-        .btab.active{color:#FF9F0A;}
-        .btab-line{position:absolute;top:0;left:25%;right:25%;height:2.5px;border-radius:0 0 2px 2px;}
-        .btab.active .btab-line{background:#FF9F0A;}
-        .bti{font-size:22px;line-height:1;}
-        .cart-dot{position:absolute;top:5px;right:calc(50% - 21px);background:#FF3B30;color:#fff;font-size:9px;font-weight:700;border-radius:8px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff;}
-        .more-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px);}
-        .more-sheet{background:#fff;border-radius:24px 24px 0 0;padding:8px 20px 40px;width:100%;max-width:480px;}
-        .more-handle{width:36px;height:4px;background:#E5E5EA;border-radius:2px;margin:10px auto 20px;}
-        .more-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
-        .more-item{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 4px;background:#F9F9F9;border-radius:14px;text-decoration:none;color:#6D6D72;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;}
-        .more-item.active{background:rgba(255,159,10,0.1);color:#FF9F0A;}
-        .more-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;}
-        .page-body{padding-bottom:72px;}
-        @media(min-width:768px){.bnav{max-width:800px;left:50%;transform:translateX(-50%);border-left:0.5px solid rgba(0,0,0,0.1);border-right:0.5px solid rgba(0,0,0,0.1);}}
-      `}</style>
+      {/* Overlay */}
+      <div className={`sidebar-overlay${sidebarOpen?" show":""}`} onClick={()=>setSidebarOpen(false)}/>
 
-      <header className="nb">
-        <Link href="/home" className="nb-logo">
-          <div className="nb-logo-icon">✦</div>
-          <div>
-            <div className="nb-name">KNOWBOTH<b>.AI</b></div>
-            <div className="nb-tagline">Know Your Savings. Know Your Spending.</div>
+      {/* ── SIDEBAR ── */}
+      <aside className={`sidebar${sidebarOpen?" open":""}${collapsed?" collapsed":""}${sidebarHidden?" sidebar-hidden":""}`}>
+
+        {/* Logo */}
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-icon">✦</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div className="sidebar-logo-name">KNOWBOTH<span>.AI</span></div>
+            <div className="sidebar-logo-tag">Know Your Savings. Know Your Spending.</div>
           </div>
-        </Link>
-        <div className="nb-actions">
-          <button className="nb-btn" onClick={()=>{setShowLoc(!showLoc);setShowProfile(false);}}>📍</button>
-          <button className="nb-btn">💬<span className="nb-bdg">2</span></button>
-          <button className="nb-btn" onClick={()=>{setShowProfile(!showProfile);setShowLoc(false);}}>
-            {user.avatar}
-            {showProfile&&<div style={{position:"absolute",inset:0,borderRadius:"50%",boxShadow:"0 0 0 2px #FF9F0A"}} />}
+          <button onClick={toggleCollapse} title={collapsed?"Expand sidebar":"Collapse sidebar"}
+            style={{width:22,height:22,borderRadius:6,background:"var(--bg)",border:"0.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,color:"var(--text3)",flexShrink:0,transition:"all 0.2s"}}
+            onMouseEnter={e=>(e.currentTarget.style.background="var(--gold)",e.currentTarget.style.color="#fff")}
+            onMouseLeave={e=>(e.currentTarget.style.background="var(--bg)",e.currentTarget.style.color="var(--text3)")}>
+            {collapsed?"›":"‹"}
           </button>
+        </div>
+
+        {/* User card */}
+        <div className="sidebar-user" onClick={()=>{router.push("/profile");setSidebarOpen(false);}}>
+          <div className="sidebar-avatar">{user?.avatar||"🧑‍🍳"}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div className="sidebar-user-name">{user?.name||"User"}</div>
+            <div className="sidebar-user-pts">{level} · ✦ {user?.points||0} pts</div>
+          </div>
+          <span style={{color:"var(--text3)",fontSize:11}}>›</span>
+        </div>
+
+        {/* Nav */}
+        <nav className="sidebar-nav">
+          <div className="sidebar-section-title">Main</div>
+          {NAV_MAIN.map(item=>(
+            <Link key={item.href} href={item.href}
+              className={`sidebar-item${isActive(item.href)?" active":""}`}
+              onClick={()=>setSidebarOpen(false)}
+              title={collapsed?item.label:undefined}>
+              <span className="sidebar-item-icon">{item.icon}</span>
+              <span className="sidebar-item-label">{item.label}</span>
+              {item.badge&&cartCount>0&&<span className="sidebar-badge">{cartCount}</span>}
+            </Link>
+          ))}
+
+          <div className="sidebar-divider"/>
+          <div className="sidebar-section-title">More</div>
+          {NAV_MORE.map(item=>(
+            <Link key={item.href} href={item.href}
+              className={`sidebar-item${isActive(item.href)?" active":""}`}
+              onClick={()=>setSidebarOpen(false)}
+              title={collapsed?item.label:undefined}>
+              <span className="sidebar-item-icon">{item.icon}</span>
+              <span className="sidebar-item-label">{item.label}</span>
+            </Link>
+          ))}
+
+          <div className="sidebar-divider"/>
+          <div className="sidebar-section-title">Settings</div>
+          <div className="sidebar-item" onClick={toggleTheme}>
+            <span className="sidebar-item-icon">{theme==="light"?"🌙":"☀️"}</span>
+            <span className="sidebar-item-label">{theme==="light"?"Dark Mode":"Light Mode"}</span>
+          </div>
+          <Link href="/profile" className={`sidebar-item${isActive("/profile")?" active":""}`} onClick={()=>setSidebarOpen(false)}>
+            <span className="sidebar-item-icon">👤</span>
+            <span className="sidebar-item-label">Profile</span>
+          </Link>
+        </nav>
+
+        {/* Footer */}
+        <div className="sidebar-footer">
+          <button className="sidebar-signout" onClick={logout}>
+            <span style={{fontSize:14}}>🚪</span> Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* ── MOBILE HEADER ── */}
+      <header className="mobile-header">
+        <button className="hamburger-btn" onClick={()=>setSidebarOpen(true)}>
+          <div className="hamburger-line"/>
+          <div className="hamburger-line"/>
+          <div className="hamburger-line"/>
+        </button>
+        <div className="mobile-logo">KNOWBOTH<span>.AI</span></div>
+        <div style={{marginLeft:"auto",display:"flex",gap:5}}>
+          <button className="top-header-btn" onClick={toggleTheme}>{theme==="light"?"🌙":"☀️"}</button>
+          <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")}>
+            🛒{cartCount>0&&<span className="top-header-badge">{cartCount}</span>}
+          </button>
+          <button className="top-header-btn" style={{fontSize:20}} onClick={()=>router.push("/profile")}>{user?.avatar||"🧑‍🍳"}</button>
         </div>
       </header>
 
-      {showLoc&&(
-        <div className="loc-panel">
-          <div className="loc-row">
-            <input className="loc-input" value={locInput} onChange={e=>setLocInput(e.target.value)} placeholder="City, ZIP" onKeyDown={e=>e.key==="Enter"&&saveLocation()} />
-            <button className="gps-btn" onClick={useGPS} disabled={gpsLoading}>{gpsLoading?"⟳":"📡 GPS"}</button>
-            <button className="save-btn" onClick={saveLocation}>Save</button>
+      {/* ── DESKTOP TOP HEADER ── */}
+      <header className="top-header" style={{marginLeft:0}}>
+        {/* Sidebar toggle */}
+        <button className="top-header-btn" onClick={toggleSidebarHidden} title={sidebarHidden?"Show sidebar":"Hide sidebar"} style={{flexShrink:0}}>
+          <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
+            <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
+            <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
           </div>
-          <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",letterSpacing:0.3,marginBottom:8}}>SEARCH RADIUS</div>
-          <div className="r-row">{RADII.map(r=><button key={r} onClick={()=>setRadius(r)} className={`r-pill${radius===r?" on":""}`}>{r}mi</button>)}</div>
+        </button>
+        {/* Page title / breadcrumb */}
+        <div style={{fontSize:15,fontWeight:700,color:"var(--text)",whiteSpace:"nowrap",flexShrink:0}}>
+          {allNavItems.find(n=>n.href===pathname)?.icon} {allNavItems.find(n=>n.href===pathname)?.label||"Dashboard"}
         </div>
-      )}
 
-      {showProfile&&(
-        <div className="prof-overlay" onClick={()=>setShowProfile(false)}>
-          <div className="prof-sheet" onClick={e=>e.stopPropagation()}>
-            <div className="prof-head">
-              <div className="prof-av">{user.avatar}</div>
-              <div>
-                <div className="prof-name">{user.name}</div>
-                <div className="prof-lvl">{getLevel(user.points||0)} · ✦ {user.points||0} pts</div>
-              </div>
-            </div>
-            <Link href="/profile" className="pmenu" onClick={()=>setShowProfile(false)}>
-              <div className="picon" style={{background:"rgba(10,132,255,0.1)"}}>👤</div>My Profile
-            </Link>
-            <div className="pmenu" style={{cursor:"default"}}>
-              <div className="picon" style={{background:"rgba(255,159,10,0.1)"}}>🌙</div>
-              <span style={{flex:1}}>Theme</span>
-              <select value={user.theme} onChange={e=>updateTheme(e.target.value as any)}
-                style={{background:"#F2F2F7",border:"none",borderRadius:8,padding:"4px 8px",fontSize:12,color:"#1C1C1E",cursor:"pointer"}}>
-                <option value="light">☀️ Light</option>
-                <option value="dark">🌙 Dark</option>
-                <option value="auto">⚙️ Auto</option>
-              </select>
-            </div>
-            <button className="pmenu red" onClick={signOut}>
-              <div className="picon" style={{background:"rgba(255,59,48,0.1)"}}>🚪</div>Sign Out
+        {/* Search */}
+        <div className="top-header-search">
+          <span className="top-header-search-icon">🔍</span>
+          <input
+            placeholder="Search deals, items, stores..."
+            onKeyDown={e=>{
+              if(e.key==="Enter"){
+                const v=(e.target as HTMLInputElement).value.trim();
+                if(v) router.push(`/deals?q=${encodeURIComponent(v)}`);
+              }
+            }}
+          />
+        </div>
+
+        {/* Actions */}
+        <div className="top-header-actions">
+          <button className="top-header-btn" onClick={toggleTheme} title={theme==="light"?"Dark Mode":"Light Mode"}>
+            {theme==="light"?"🌙":"☀️"}
+          </button>
+          <button className="top-header-btn" onClick={()=>router.push("/chat")} title="AI Chat">💬</button>
+          <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")} title="Cart">
+            🛒{cartCount>0&&<span className="top-header-badge">{cartCount}</span>}
+          </button>
+
+          {/* Avatar + dropdown */}
+          <div ref={profileRef} style={{position:"relative"}}>
+            <button className="top-header-btn" onClick={()=>setShowProfile(!showProfile)}
+              style={{fontSize:20,background:showProfile?"var(--gold-bg)":"var(--bg)"}}>
+              {user?.avatar||"🧑‍🍳"}
             </button>
+            {showProfile&&(
+              <div className="prof-sheet">
+                {/* User info */}
+                <div style={{padding:"12px 14px",borderBottom:"0.5px solid var(--border2)"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{user?.name||"User"}</div>
+                  <div style={{fontSize:10,color:"var(--text3)",marginTop:1}}>{level} · ✦ {user?.points||0} pts</div>
+                </div>
+                {[
+                  {l:"👤 My Profile",h:"/profile"},
+                  {l:"📊 Expenses",h:"/expenses"},
+                  {l:"📈 Analytics",h:"/analytics"},
+                  {l:"👥 Community",h:"/community"},
+                ].map(item=>(
+                  <div key={item.h} className="prof-item"
+                    onClick={()=>{router.push(item.h);setShowProfile(false);}}>
+                    {item.l}
+                  </div>
+                ))}
+                <div className="prof-item" onClick={toggleTheme}>
+                  {theme==="light"?"🌙 Dark Mode":"☀️ Light Mode"}
+                </div>
+                <div className="prof-item" style={{color:"var(--red)"}} onClick={logout}>
+                  🚪 Sign Out
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </header>
 
+      {/* ── MOBILE BOTTOM NAV ── */}
       <nav className="bnav">
-        {TABS.map((t)=>{
-          if(t.more) return(
-            <button key="more" className={`btab${MORE_ITEMS.some(m=>m.href===pathname)?" active":""}`} onClick={()=>setShowMore(true)}>
-              <div className="btab-line"/><span className="bti">⋯</span><span>More</span>
+        {BOTTOM_TABS.map((tab:any,i)=>{
+          if(tab.scan) return(
+            <div key="scan" className="nav-fab-wrap">
+              <button className="nav-fab" onClick={()=>router.push("/scan")}>🧾</button>
+            </div>
+          );
+          if(tab.more) return(
+            <button key="more" className={`btab${showMore?" active":""}`} onClick={()=>setShowMore(true)}>
+              <div className="btab-line"/>
+              <span className="bti">⋯</span>
+              <span>More</span>
             </button>
           );
           return(
-            <Link key={t.href} href={t.href!} className={`btab${pathname===t.href?" active":""}`}>
-              <div className="btab-line"/><span className="bti">{t.icon}</span><span>{t.label}</span>
-              {t.badge&&pending>0&&<span className="cart-dot">{pending>99?"99+":pending}</span>}
+            <Link key={tab.href} href={tab.href} className={`btab${pathname===tab.href?" active":""}`}>
+              <div className="btab-line"/>
+              <span className="bti">
+                {tab.icon}
+                {tab.href==="/cart"&&cartCount>0&&<sup style={{fontSize:7,color:"var(--red)",fontWeight:700,marginLeft:1}}>{cartCount}</sup>}
+              </span>
+              <span>{tab.label}</span>
             </Link>
           );
         })}
       </nav>
 
+      {/* ── MOBILE MORE SHEET ── */}
       {showMore&&(
-        <div className="more-overlay" onClick={e=>e.target===e.currentTarget&&setShowMore(false)}>
-          <div className="more-sheet">
-            <div className="more-handle"/>
-            <div style={{fontSize:18,fontWeight:700,color:"#1C1C1E",letterSpacing:-0.5,marginBottom:16,paddingLeft:4}}>More</div>
-            <div className="more-grid">
-              {MORE_ITEMS.map(item=>(
-                <Link key={item.href} href={item.href} className={`more-item${pathname===item.href?" active":""}`} onClick={()=>setShowMore(false)}>
-                  <div className="more-icon" style={{background:`${item.color}18`}}>{item.icon}</div>
-                  <span>{item.label}</span>
-                </Link>
+        <div onClick={()=>setShowMore(false)}
+          style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:150,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{background:"var(--surf)",borderRadius:"18px 18px 0 0",padding:"8px 16px 36px",width:"100%",maxWidth:480}}>
+            <div style={{width:32,height:3,background:"var(--border)",borderRadius:2,margin:"8px auto 16px"}}/>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
+              {[...NAV_MORE,{href:"/profile",icon:"👤",label:"Profile"}].map(item=>(
+                <div key={item.href} onClick={()=>{router.push(item.href);setShowMore(false);}}
+                  style={{display:"flex",flexDirection:"column" as const,alignItems:"center",gap:5,padding:"12px 8px",borderRadius:12,background:"var(--bg)",cursor:"pointer"}}>
+                  <span style={{fontSize:22}}>{item.icon}</span>
+                  <span style={{fontSize:10,fontWeight:600,color:"var(--text2)"}}>{item.label}</span>
+                </div>
               ))}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <div onClick={toggleTheme}
+                style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,background:"var(--bg)",cursor:"pointer"}}>
+                <span style={{fontSize:18}}>{theme==="light"?"🌙":"☀️"}</span>
+                <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>{theme==="light"?"Dark":"Light"}</span>
+              </div>
+              <div onClick={logout}
+                style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,background:"rgba(255,59,48,0.06)",cursor:"pointer"}}>
+                <span style={{fontSize:18}}>🚪</span>
+                <span style={{fontSize:12,fontWeight:600,color:"var(--red)"}}>Sign Out</span>
+              </div>
             </div>
           </div>
         </div>

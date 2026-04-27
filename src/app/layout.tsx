@@ -1,65 +1,48 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import "./globals.css";
-import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthSync } from "@/components/AuthSync";
-import { PWAInstall } from "@/components/PWAInstall";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { Navbar } from "@/components/Navbar";
 import { Toaster } from "react-hot-toast";
+
+export const viewport = { themeColor: "#FF9F0A" };
 
 export const metadata: Metadata = {
   title: "KNOWBOTH.AI — Know Your Savings. Know Your Spending.",
-  description: "Scan any bill. Compare grocery prices. Track all expenses. Globally.",
+  description: "Smart grocery price comparison and expense tracker for Indian households in DFW",
   manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "KNOWBOTH.AI",
-  },
-  formatDetection: { telephone: false },
-  openGraph: {
-    type: "website",
-    title: "KNOWBOTH.AI",
-    description: "Know Your Savings. Know Your Spending.",
-  },
-};
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: "#F5A623",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "KNOWBOTH.AI" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <head>
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+        <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
       </head>
       <body>
-        <ThemeProvider>
-          <AuthSync />
+        <ThemeProvider/>
+        <AuthSync/>
+        <Navbar/>
+        <div className="main-content">
           {children}
-          <PWAInstall />
-        </ThemeProvider>
-    <Toaster 
-  position="top-right"
-  toastOptions={{
-    duration: 2000,
-    style: {
-      background: "#fff",
-      color: "#1C1C1E",
-      border: "1px solid #F2F2F7",
-      fontSize: "13px",
-      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-      borderRadius: "12px",
-      padding: "10px 14px",
-    },
-  }}
-/>
+        </div>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 2500,
+            style: {
+              background: "var(--surf)",
+              color: "var(--text)",
+              border: "0.5px solid var(--border)",
+              fontSize: "13px",
+              boxShadow: "var(--shadow-md)",
+              borderRadius: "12px",
+              padding: "10px 14px",
+            },
+          }}
+        />
       </body>
     </html>
   );

@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Navbar } from "@/components/Navbar";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { supabaseAuth } from "@/lib/supabase";
@@ -134,9 +133,10 @@ export default function ProfilePage() {
   const progress = Math.min(100, Math.round(((user?.points||0)/nextTarget)*100));
 
   return (
-    <div style={{minHeight:"100vh",background:"#F2F2F7"}} className="page-body">
-      <Navbar />
-      <div className="container" style={{maxWidth:600}}>
+    <>
+      <div style={{background:"var(--bg)",minHeight:"100vh"}}>
+        <div style={{padding:"20px 24px",maxWidth:1200,width:"100%"}}>
+          <div className="container" style={{maxWidth:600}}>
 
         {/* Profile Hero */}
         <div style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",borderRadius:20,padding:"24px 20px",marginBottom:16,textAlign:"center",position:"relative",overflow:"hidden"}}>
@@ -281,7 +281,9 @@ export default function ProfilePage() {
           </div>
         )}
 
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,6 +1,5 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Navbar } from "@/components/Navbar";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 
@@ -71,8 +70,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:"var(--bg)", display:"flex", flexDirection:"column" }} className="page-body">
-      <Navbar />
+    <>      <div className="page-body" style={{background:"var(--bg)",minHeight:"100vh"}}>
       <div style={{ flex:1, maxWidth:800, margin:"0 auto", width:"100%", display:"flex", flexDirection:"column", padding:"0 14px" }}>
 
         {/* Header */}
@@ -140,5 +138,6 @@ export default function ChatPage() {
       </div>
       <style>{`@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}`}</style>
     </div>
+  </>
   );
 }

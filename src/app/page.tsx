@@ -59,7 +59,6 @@ export default function OnboardingPage() {
           <div style={{fontSize:12,color:"var(--text-muted)",fontWeight:500}}>{step+1} of {STEPS.length}</div>
           {step<STEPS.length-1&&<button onClick={()=>router.push("/home")} style={{background:"none",border:"none",color:"var(--text-muted)",fontSize:13,cursor:"pointer"}}>Skip</button>}
           {step===STEPS.length-1&&<div style={{width:40}} />}
-        </div>
         <div style={{height:4,background:"var(--surf2)",borderRadius:2,overflow:"hidden"}}>
           <div style={{height:"100%",width:`${progress}%`,background:"linear-gradient(90deg,var(--gold),var(--gold-dim))",borderRadius:2,transition:"width 0.4s ease"}} />
         </div>
@@ -77,10 +76,7 @@ export default function OnboardingPage() {
               {["🏷️  Compare grocery prices near you","🧾  Scan any bill instantly","📊  Track all your expenses","🤖  AI-powered savings tips"].map(f=>(
                 <div key={f} style={{background:"var(--surf)",borderRadius:12,padding:"13px 16px",fontSize:14,fontWeight:500,color:"var(--text)",textAlign:"left",boxShadow:"var(--shadow-sm)"}}>
                   {f}
-                </div>
               ))}
-            </div>
-          </div>
         )}
 
         {/* Step 1: Name */}
@@ -103,10 +99,7 @@ export default function OnboardingPage() {
               {AVATARS.map(a=>(
                 <div key={a} onClick={()=>setAvatar(a)} style={{aspectRatio:"1",borderRadius:16,background:avatar===a?"rgba(255,159,10,0.12)":"var(--surf)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,cursor:"pointer",boxShadow:avatar===a?"0 0 0 2px var(--gold), var(--shadow-sm)":"var(--shadow-sm)",transition:"all 0.15s"}}>
                   {a}
-                </div>
               ))}
-            </div>
-          </div>
         )}
 
         {/* Step 3: Location */}
@@ -136,10 +129,7 @@ export default function OnboardingPage() {
                     <div style={{fontSize:12,color:"var(--text-muted)"}}>{c.value}</div>
                   </div>
                   {currency===c.value&&<div style={{width:22,height:22,borderRadius:"50%",background:"var(--gold)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#fff",fontWeight:700}}>✓</div>}
-                </div>
               ))}
-            </div>
-          </div>
         )}
 
         {/* Step 5: Theme */}
@@ -156,12 +146,8 @@ export default function OnboardingPage() {
                     <div style={{fontSize:13,color:"var(--text-muted)"}}>{t.desc}</div>
                   </div>
                   {theme===t.v&&<div style={{width:22,height:22,borderRadius:"50%",background:"var(--gold)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#fff",fontWeight:700}}>✓</div>}
-                </div>
               ))}
-            </div>
-          </div>
         )}
-      </div>
 
       {/* CTA Button */}
       <div style={{paddingTop:20}}>
@@ -174,7 +160,5 @@ export default function OnboardingPage() {
             Start Saving ✦
           </button>
         )}
-      </div>
-    </div>
   );
 }

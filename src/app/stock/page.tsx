@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Navbar } from "@/components/Navbar";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { supabaseAuth } from "@/lib/supabase";
@@ -137,9 +136,10 @@ export default function StockPage() {
   });
 
   return (
-    <div style={{minHeight:"100vh",background:"#F2F2F7",paddingBottom:84}} className="page-body">
-      <Navbar />
-      <div className="container">
+    <>
+      <div style={{background:"var(--bg)",minHeight:"100vh"}}>
+        <div style={{padding:"20px 24px",maxWidth:1200,width:"100%"}}>
+          <div style={{padding:"20px 24px"}}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -237,9 +237,9 @@ export default function StockPage() {
                         <div style={{fontSize:15,fontWeight:700,color:"#FF9F0A"}}>{fmt(item.price)}<span style={{fontSize:10,color:"#AEAEB2",fontWeight:400}}>/{item.unit}</span></div>
                         <div style={{fontSize:11,color:"#6D6D72",marginTop:1}}>qty: {item.quantity}</div>
                       </div>
-                      <div style={{display:"flex",flexDirection:"column" as const,gap:4,flexShrink:0}}>
-                        <button onClick={()=>{setRestockItem(item);setRestockQty(1);}} style={{background:"rgba(255,159,10,0.1)",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:600,color:"#FF9F0A",cursor:"pointer",whiteSpace:"nowrap" as const}}>🔄 Restock</button>
-                        <button onClick={()=>{if(confirm(`Remove ${item.name} from stock?`)){setStockItems(prev=>prev.filter(i=>i.id!==item.id));toast.success(`${item.name} removed`);}}} style={{background:"rgba(255,59,48,0.08)",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:600,color:"#FF3B30",cursor:"pointer",whiteSpace:"nowrap" as const}}>✕ Remove</button>
+                      <div style={{display:"flex",flexDirection:"column" as const,gap:5,flexShrink:0}}>
+                        <button onClick={()=>{setRestockItem(item);setRestockQty(1);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:9,padding:"7px 12px",fontSize:11,fontWeight:700,color:"#fff",cursor:"pointer",whiteSpace:"nowrap" as const,boxShadow:"0 2px 6px rgba(255,159,10,0.3)"}}>🔄 Restock</button>
+                        <button onClick={()=>{if(window.confirm(`Remove ${item.name} from stock?`)){setStockItems(prev=>prev.filter(i=>i.id!==item.id));toast.success(`${item.name} removed`);}}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,background:"rgba(255,59,48,0.08)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:9,padding:"7px 12px",fontSize:11,fontWeight:700,color:"#FF3B30",cursor:"pointer",whiteSpace:"nowrap" as const}}>✕ Remove</button>
                       </div>
                     </div>
                   ))}
@@ -286,8 +286,8 @@ export default function StockPage() {
             ))}
           </>
         )}
-      </div>
-      {/* Restock Modal */}
+
+        {/* Restock Modal */}
       {restockItem&&(
         <div onClick={e=>{if(e.target===e.currentTarget)setRestockItem(null);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div style={{background:"#fff",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480}}>
@@ -307,7 +307,7 @@ export default function StockPage() {
                 const inCart=cart.find((c:any)=>c.id===restockItem.id);
                 if(inCart){toast("Already in cart");setRestockItem(null);return;}
                 for(let i=0;i<restockQty;i++){
-                  addToCart({id:`restock-${restockItem.id}-${Date.now()}`, name:restockItem.name,price:restockItem.price,unit:restockItem.unit,store:restockItem.store_name,store_slug:"",category:restockItem.category,icon:"🛒"});
+                  addToCart({id:`restock-${restockItem.id}-${Date.now()}-${i}`,name:restockItem.name,price:restockItem.price,unit:restockItem.unit,store:restockItem.store_name,store_slug:"",category:restockItem.category,icon:"🛒"});
                 }
                 toast.success(`✦ ${restockQty}x ${restockItem.name} added to cart`);
                 setRestockItem(null);
@@ -318,6 +318,9 @@ export default function StockPage() {
           </div>
         </div>
       )}
-    </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

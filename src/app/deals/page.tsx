@@ -2,7 +2,6 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Navbar } from "@/components/Navbar";
 import { useAppStore } from "@/lib/store";
 import { getFreshness, STORE_COLORS } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -186,7 +185,6 @@ function DealsContent() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#F2F2F7" }} className="page-body">
-      <Navbar />
       <div className="container">
 
         {/* Tab switcher */}

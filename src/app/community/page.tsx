@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Navbar } from "@/components/Navbar";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { supabaseAuth } from "@/lib/supabase";
@@ -175,8 +174,7 @@ export default function CommunityPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F2F2F7" }} className="page-body">
-      <Navbar />
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <div className="container" style={{ maxWidth: 680 }}>
 
         {/* Header */}
