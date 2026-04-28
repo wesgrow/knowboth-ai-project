@@ -242,7 +242,10 @@ export function Navbar() {
 
       {/* ── MOBILE HEADER ── */}
       <header className="mobile-header">
-        <div className="mobile-logo">KNOWBOTH<span>.AI</span></div>
+        <div style={{display:"flex",flexDirection:"column",gap:1}}>
+          <div className="mobile-logo">KNOWBOTH<span>.AI</span></div>
+          <div style={{fontSize:9,color:"var(--text3)",fontWeight:500,letterSpacing:0.2,lineHeight:1}}>Know Your Savings. Know Your Spending.</div>
+        </div>
         <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center"}}>
           {/* Location trigger */}
           <button ref={mobileLocBtnRef} onClick={()=>setShowLocation(s=>!s)}
