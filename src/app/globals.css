@@ -118,11 +118,6 @@ input,select,textarea{font-family:inherit;}
 .sidebar-divider{height:0.5px;background:var(--border2);margin:4px 6px;}
 
 /* ── SIDEBAR FOOTER ── */
-.sidebar-footer{
-  padding:8px;
-  border-top:0.5px solid var(--border2);
-  flex-shrink:0;
-}
 .sidebar-signout{
   display:flex;align-items:center;gap:8px;
   padding:7px 8px;border-radius:8px;
@@ -335,7 +330,6 @@ input,select,textarea{font-family:inherit;}
 .sidebar.collapsed .sidebar-item { padding: 8px; justify-content: center; }
 .sidebar.collapsed .sidebar-item-icon { width: auto; }
 .sidebar.collapsed .sidebar-item.active::before { display: none; }
-.sidebar.collapsed .sidebar-footer { padding: 8px 6px; }
 .sidebar.collapsed .sidebar-signout { justify-content: center; padding: 8px; }
 .sidebar.collapsed .sidebar-divider { margin: 4px 4px; }
 

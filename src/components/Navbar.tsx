@@ -180,14 +180,11 @@ export function Navbar() {
             <span className="sidebar-item-icon">👤</span>
             <span className="sidebar-item-label">Profile</span>
           </Link>
-        </nav>
-
-        {/* Footer */}
-        <div className="sidebar-footer">
+          <div className="sidebar-divider"/>
           <button className="sidebar-signout" onClick={logout}>
             <span style={{fontSize:14}}>🚪</span> Sign Out
           </button>
-        </div>
+        </nav>
       </aside>
 
       {/* ── MOBILE HEADER ── */}
@@ -199,11 +196,9 @@ export function Navbar() {
         </button>
         <div className="mobile-logo">KNOWBOTH<span>.AI</span></div>
         <div style={{marginLeft:"auto",display:"flex",gap:5}}>
-          <button className="top-header-btn" onClick={toggleTheme}>{theme==="light"?"🌙":"☀️"}</button>
           <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")}>
             🛒{cartCount>0&&<span className="top-header-badge">{cartCount}</span>}
           </button>
-          <button className="top-header-btn" style={{fontSize:20}} onClick={()=>router.push("/profile")}>{user?.avatar||"🧑‍🍳"}</button>
         </div>
       </header>
 
