@@ -125,10 +125,14 @@ export default function PostDealPage() {
     if (!name) { toast.error("Enter store name"); return; }
     setAddingBrand(true);
     const slug = toSlug(name);
-    const { data, error } = await supabase.from("brands").insert({ name, slug, website:newBrandWebsite.trim()||null, phone:newBrandPhone.trim()||null }).select("id,name,slug").single();
+    const payload: any = { name, slug };
+    if (newBrandWebsite.trim()) payload.website = newBrandWebsite.trim();
+    if (newBrandPhone.trim()) payload.phone = newBrandPhone.trim();
+    const { data, error } = await supabase.from("brands").insert(payload).select("id,name,slug").single();
     if (error) {
+      console.error("createBrand error:", error);
       if (error.code==="23505") toast.error("A store with that name already exists");
-      else toast.error("Could not create store");
+      else toast.error(`Could not create store: ${error.message}`);
       setAddingBrand(false); return;
     }
     await fetchBrands();
@@ -144,13 +148,16 @@ export default function PostDealPage() {
     if (!city) { toast.error("Enter city"); return; }
     setAddingLoc(true);
     const branch_name = newLocBranch.trim() || `${selectedBrand.name} - ${city}`;
-    const { error } = await supabase.from("store_locations").insert({
-      brand_id:selectedBrand.id, branch_name,
-      address:newLocAddress.trim()||null, city, state:newLocState.trim()||null,
-      zip:newLocZip.trim(), phone:newLocPhone.trim()||null,
-      lat:newLocLat, lng:newLocLng, map_link:newLocMapLink||null,
-    });
-    if (error) { toast.error("Could not add location"); setAddingLoc(false); return; }
+    const locPayload: any = { brand_id:selectedBrand.id, branch_name, city };
+    if (newLocAddress.trim()) locPayload.address = newLocAddress.trim();
+    if (newLocState.trim()) locPayload.state = newLocState.trim();
+    if (newLocZip.trim()) locPayload.zip = newLocZip.trim();
+    if (newLocPhone.trim()) locPayload.phone = newLocPhone.trim();
+    if (newLocLat != null) locPayload.lat = newLocLat;
+    if (newLocLng != null) locPayload.lng = newLocLng;
+    if (newLocMapLink) locPayload.map_link = newLocMapLink;
+    const { error } = await supabase.from("store_locations").insert(locPayload);
+    if (error) { console.error("createLocation error:", error); toast.error(`Could not add location: ${error.message}`); setAddingLoc(false); return; }
     await fetchLocations(selectedBrand.id);
     setNewLocBranch(""); setNewLocAddress(""); setNewLocCity(""); setNewLocState(""); setNewLocZip(""); setNewLocPhone(""); setNewLocLat(null); setNewLocLng(null); setNewLocMapLink(""); setShowAddLoc(false);
     toast.success("Location added");

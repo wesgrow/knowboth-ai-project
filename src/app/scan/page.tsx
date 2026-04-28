@@ -124,8 +124,11 @@ export default function ScanPage() {
     const name = newBrandName.trim();
     if (!name) { toast.error("Enter store name"); return; }
     setAddingBrand(true);
-    const { data, error } = await supabase.from("brands").insert({ name, slug:toSlug(name), website:newBrandWebsite.trim()||null, phone:newBrandPhone.trim()||null }).select("id,name,slug").single();
-    if (error) { toast.error(error.code==="23505"?"Store already exists":"Could not create store"); setAddingBrand(false); return; }
+    const brandPayload: any = { name, slug:toSlug(name) };
+    if (newBrandWebsite.trim()) brandPayload.website = newBrandWebsite.trim();
+    if (newBrandPhone.trim()) brandPayload.phone = newBrandPhone.trim();
+    const { data, error } = await supabase.from("brands").insert(brandPayload).select("id,name,slug").single();
+    if (error) { console.error("createBrand error:", error); toast.error(error.code==="23505"?"Store already exists":`Error: ${error.message}`); setAddingBrand(false); return; }
     setBrands(prev=>[...prev,data].sort((a,b)=>a.name.localeCompare(b.name)));
     setLinkedBrand(data); setLinkedLocation(null); fetchBrandLocations(data.id);
     setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
@@ -139,13 +142,16 @@ export default function ScanPage() {
     if (!city) { toast.error("Enter city"); return; }
     setAddingLoc(true);
     const branch_name = newLocBranch.trim() || `${linkedBrand.name} - ${city}`;
-    const { data, error } = await supabase.from("store_locations").insert({
-      brand_id:linkedBrand.id, branch_name,
-      address:newLocAddress.trim()||null, city, state:newLocState.trim()||null,
-      zip:newLocZip.trim(), phone:newLocPhone.trim()||null,
-      lat:newLocLat, lng:newLocLng, map_link:newLocMapLink||null,
-    }).select("id,branch_name,address,city,state,zip,phone,lat,lng,map_link").single();
-    if (error) { toast.error("Could not add location"); setAddingLoc(false); return; }
+    const locPayload: any = { brand_id:linkedBrand.id, branch_name, city };
+    if (newLocAddress.trim()) locPayload.address = newLocAddress.trim();
+    if (newLocState.trim()) locPayload.state = newLocState.trim();
+    if (newLocZip.trim()) locPayload.zip = newLocZip.trim();
+    if (newLocPhone.trim()) locPayload.phone = newLocPhone.trim();
+    if (newLocLat != null) locPayload.lat = newLocLat;
+    if (newLocLng != null) locPayload.lng = newLocLng;
+    if (newLocMapLink) locPayload.map_link = newLocMapLink;
+    const { data, error } = await supabase.from("store_locations").insert(locPayload).select("id,branch_name,address,city,state,zip,phone,lat,lng,map_link").single();
+    if (error) { console.error("createLocation error:", error); toast.error(`Could not add location: ${error.message}`); setAddingLoc(false); return; }
     setLocations(prev=>[...prev,data]);
     setLinkedLocation(data);
     setNewLocBranch(""); setNewLocAddress(""); setNewLocCity(""); setNewLocState(""); setNewLocZip(""); setNewLocPhone(""); setNewLocLat(null); setNewLocLng(null); setNewLocMapLink(""); setShowAddLoc(false);
