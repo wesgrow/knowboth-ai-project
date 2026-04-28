@@ -9,27 +9,12 @@ import toast from "react-hot-toast";
 const CATS = ["All","Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household"];
 const SORTS = [{v:"newest",l:"Newest"},{v:"price_asc",l:"Price ↑"},{v:"savings",l:"Savings"},{v:"expiring",l:"Expiring"}];
 type View = "list"|"table"|"cards";
-type Tab = "deals"|"compare";
-
-// Group items by normalized name across stores
-function groupByItem(items: any[]) {
-  const map: Record<string, any[]> = {};
-  items.forEach(item => {
-    const key = item.normalized_name || item.name?.toLowerCase() || "";
-    if (!map[key]) map[key] = [];
-    map[key].push(item);
-  });
-  // Sort each group by price ascending
-  Object.values(map).forEach(arr => arr.sort((a, b) => a.price - b.price));
-  return map;
-}
 
 function DealsContent() {
   const params = useSearchParams();
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("deals");
   const [view, setView] = useState<View>("list");
   const [search, setSearch] = useState(params.get("q") || "");
   const [cat, setCat] = useState("All");
@@ -41,13 +26,45 @@ function DealsContent() {
   const [freshToday, setFreshToday] = useState(false);
   const [showPanel, setShowPanel] = useState(false);
   const [stores, setStores] = useState<string[]>([]);
+  const [phItems, setPhItems] = useState<any[]>([]);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [cq, setCq] = useState("");
-  const [cResults, setCResults] = useState<any[]>([]);
-  const [cLoading, setCLoading] = useState(false);
   const { addToCart, cart } = useAppStore();
 
   useEffect(() => { fetchDeals(); }, []);
+
+  // Search price_history when user types — debounced, server-side
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) { setPhItems([]); return; }
+    const normalized = q.toLowerCase().replace(/\s+/g, " ").replace(/[^a-z0-9 ]/g, "");
+    const timer = setTimeout(async () => {
+      const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("price_history")
+        .select("id,item_name,normalized_name,store_name,store_city,price,unit,source,recorded_at")
+        .ilike("normalized_name", `%${normalized}%`)
+        .gte("recorded_at", since)
+        .order("recorded_at", { ascending: false })
+        .limit(100);
+      setPhItems((data || []).map((p: any) => ({
+        id: `ph-${p.id}`,
+        name: p.item_name,
+        normalized_name: p.normalized_name,
+        price: p.price,
+        regular_price: null,
+        unit: p.unit || "ea",
+        category: "Community",
+        savings_pct: null,
+        source: p.source || "receipt",
+        created_at: p.recorded_at,
+        deal: null,
+        brand: { name: p.store_name, slug: "" },
+        from_price_history: true,
+        store_city: p.store_city,
+      })));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   async function fetchDeals() {
     setLoading(true);
@@ -68,70 +85,14 @@ function DealsContent() {
     setLoading(false);
   }
 
-  async function doCompare(term?: string) {
-    const q = term || cq; if (!q.trim()) return;
-    setCLoading(true);
-    const normalizedQ = q.toLowerCase().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
-
-    // Search deal_items (posted deals)
-    const { data: di } = await supabase.from("deal_items").select("id,name,price,regular_price,unit,category,created_at,deal_id,source").ilike("normalized_name", `%${q}%`).order("price", { ascending: true }).limit(10);
-
-    // Search price_history (from scanned bills — crowdsourced)
-    const { data: ph } = await supabase.from("price_history")
-      .select("id,item_name,store_name,store_city,price,unit,source,recorded_at")
-      .ilike("normalized_name", `%${normalizedQ}%`)
-      .order("recorded_at", { ascending: false }).limit(10);
-
-    let dealResults: any[] = [];
-    if (di?.length) {
-      const dealIds = di.map((d: any) => d.deal_id);
-      const { data: deals } = await supabase.from("deals").select("id,sale_end,brand_id").in("id", dealIds).eq("status", "approved");
-      const aIds = new Set((deals || []).map((d: any) => d.id));
-      const filtered = di.filter((i: any) => aIds.has(i.deal_id));
-      const bIds = [...new Set((deals || []).map((d: any) => d.brand_id).filter(Boolean))];
-      const { data: brands } = await supabase.from("brands").select("id,name,slug").in("id", bIds as string[]);
-      const bMap: Record<string, any> = {}; (brands || []).forEach((b: any) => { bMap[b.id] = b; });
-      const dMap: Record<string, any> = {}; (deals || []).forEach((d: any) => { dMap[d.id] = d; });
-      dealResults = filtered.map((i: any) => ({ ...i, brand: bMap[dMap[i.deal_id]?.brand_id], deal: dMap[i.deal_id], from_price_history: false }));
-    }
-
-    // Map price_history results
-    const phResults: any[] = (ph || []).map((p: any) => ({
-      id: `ph-${p.id}`,
-      name: p.item_name,
-      price: p.price,
-      regular_price: null,
-      unit: p.unit || "ea",
-      source: "receipt",
-      created_at: p.recorded_at,
-      brand: { name: p.store_name, slug: "" },
-      deal: null,
-      from_price_history: true,
-      store_city: p.store_city,
-    }));
-
-    // Merge and deduplicate by store name — prefer deal_items over price_history
-    const seen = new Set<string>();
-    const merged = [...dealResults, ...phResults].filter(item => {
-      const key = `${item.brand?.name}-${item.price}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).sort((a, b) => a.price - b.price);
-
-    if (merged.length === 0) { setCResults([]); setCLoading(false); return; }
-    setCResults(merged);
-    setCLoading(false);
-  }
-
   function dL(s: string | null) { if (!s) return null; return Math.ceil((new Date(s).getTime() - Date.now()) / 86400000); }
-  function src(s: string | null) { return s === "receipt" ? "🧾 Receipt" : s === "flyer" ? "📄 Flyer" : "✏️ Manual"; }
+  function src(s: string | null, fromPH?: boolean) { return fromPH ? "🧾 Community" : s === "receipt" ? "🧾 Receipt" : s === "flyer" ? "📄 Flyer" : "✏️ Manual"; }
   function ago(ts: string) { const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000); if (m < 60) return `${m}m`; const h = Math.floor(m / 60); if (h < 24) return `${h}h`; return `${Math.floor(h / 24)}d`; }
 
   const aF = [cat !== "All" && { l: cat, c: () => setCat("All") }, storeFilter !== "All" && { l: storeFilter, c: () => setStoreFilter("All") }, onSale && { l: "On Sale", c: () => setOnSale(false) }, expiringSoon && { l: "Expiring", c: () => setExpiringSoon(false) }, freshToday && { l: "Fresh", c: () => setFreshToday(false) }, maxPrice < 50 && { l: `<$${maxPrice}`, c: () => setMaxPrice(50) }].filter(Boolean) as { l: string; c: () => void }[];
   function clrAll() { setCat("All"); setStoreFilter("All"); setOnSale(false); setExpiringSoon(false); setFreshToday(false); setMaxPrice(50); }
 
-  const filtered = items.filter(item => {
+  const filtered = [...items, ...phItems].filter(item => {
     const q = search.toLowerCase();
     const dl = dL(item.deal?.sale_end);
     const fr = getFreshness(item.created_at);
@@ -145,25 +106,33 @@ function DealsContent() {
     if (item.price > maxPrice) return false;
     return true;
   }).sort((a, b) => {
+    // posted deals always before community prices
+    if (a.from_price_history !== b.from_price_history) return a.from_price_history ? 1 : -1;
     if (sort === "price_asc") return a.price - b.price;
     if (sort === "savings") return (b.savings_pct || 0) - (a.savings_pct || 0);
     if (sort === "expiring") return (dL(a.deal?.sale_end) || 999) - (dL(b.deal?.sale_end) || 999);
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  // Group by category then by item name
+  // Group posted deals by category → item
   const grouped: Record<string, Record<string, any[]>> = {};
-  filtered.forEach(item => {
+  filtered.filter(i => !i.from_price_history).forEach(item => {
     const c = item.category || "Other";
     const key = item.normalized_name || item.name?.toLowerCase() || "";
     if (!grouped[c]) grouped[c] = {};
     if (!grouped[c][key]) grouped[c][key] = [];
     grouped[c][key].push(item);
   });
-  // Sort each item group by price
-  Object.values(grouped).forEach(catGroup => {
-    Object.values(catGroup).forEach(arr => arr.sort((a, b) => a.price - b.price));
+  Object.values(grouped).forEach(cg => { Object.values(cg).forEach(arr => arr.sort((a, b) => a.price - b.price)); });
+
+  // Group community prices by item name (flat, no category split)
+  const communityGrouped: Record<string, any[]> = {};
+  filtered.filter(i => i.from_price_history).forEach(item => {
+    const key = item.normalized_name || item.name?.toLowerCase() || "";
+    if (!communityGrouped[key]) communityGrouped[key] = [];
+    communityGrouped[key].push(item);
   });
+  Object.values(communityGrouped).forEach(arr => arr.sort((a, b) => a.price - b.price));
 
   function toggleExpand(key: string) {
     setExpandedItems(prev => {
@@ -181,23 +150,11 @@ function DealsContent() {
 
   const S = { padding: "10px 14px", fontSize: 13, fontWeight: 600 as const, color: "#1C1C1E", borderBottom: "0.5px solid #F2F2F7", verticalAlign: "middle" as const };
   const TH = { padding: "9px 14px", fontSize: 11, fontWeight: 600 as const, color: "#AEAEB2", textAlign: "left" as const, letterSpacing: 0.3, textTransform: "uppercase" as const, background: "#F9F9F9", borderBottom: "0.5px solid #F2F2F7", whiteSpace: "nowrap" as const };
-  const cheapest = cResults[0]?.price;
-
   return (
     <div style={{ minHeight: "100vh", background: "#F2F2F7" }} className="page-body">
       <div className="container">
 
-        {/* Tab switcher */}
-        <div style={{ display: "flex", background: "#fff", borderRadius: 12, padding: 3, gap: 2, marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-          {([["deals", "🏷️ Deals"], ["compare", "⚖️ Compare"]] as const).map(([t, l]) => (
-            <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "10px", fontSize: 14, fontWeight: 600, cursor: "pointer", borderRadius: 10, border: "none", background: tab === t ? "#F2F2F7" : "transparent", color: tab === t ? "#1C1C1E" : "#AEAEB2", boxShadow: tab === t ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 0.2s" }}>{l}</button>
-          ))}
-        </div>
-
-        {/* ─── DEALS TAB ─── */}
-        {tab === "deals" && (
-          <>
-            {/* Search */}
+        {/* Search */}
             <div style={{ position: "relative", marginBottom: 10 }}>
               <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#AEAEB2", fontSize: 15 }}>🔍</span>
               <input style={{ width: "100%", background: "#fff", border: "none", borderRadius: 12, padding: "12px 16px 12px 42px", fontSize: 15, color: "#1C1C1E", outline: "none", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search deals, items, stores..." />
@@ -260,10 +217,25 @@ function DealsContent() {
               </div>
             )}
 
-            <div style={{ fontSize: 12, color: "#AEAEB2", marginBottom: 10, fontWeight: 500 }}>{filtered.length} deals</div>
+            <div style={{ fontSize: 12, color: "#AEAEB2", marginBottom: 10, fontWeight: 500 }}>
+              {filtered.filter(i => !i.from_price_history).length} deals
+              {phItems.length > 0 && ` · ${filtered.filter(i => i.from_price_history).length} community prices`}
+            </div>
             {loading && <div style={{ textAlign: "center", padding: "60px 0", color: "#AEAEB2" }}>Loading deals...</div>}
-            {!loading && items.length === 0 && <div style={{ textAlign: "center", padding: "60px 0" }}><div style={{ fontSize: 16, fontWeight: 600, color: "#1C1C1E" }}>No deals yet</div><button onClick={() => router.push("/post-deal")} style={{ marginTop: 12, background: "linear-gradient(135deg,#FF9F0A,#D4800A)", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>📷 Post First Deal</button></div>}
-            {!loading && items.length > 0 && filtered.length === 0 && <div style={{ textAlign: "center", padding: "40px 0" }}><div style={{ fontSize: 15, fontWeight: 600, color: "#1C1C1E" }}>No matches</div><button onClick={clrAll} style={{ background: "none", border: "none", color: "#FF9F0A", fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Clear filters</button></div>}
+            {!loading && items.length === 0 && phItems.length === 0 && (
+              <div style={{ textAlign: "center", padding: "60px 0" }}>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>🏷️</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#1C1C1E", marginBottom: 6 }}>No deals yet</div>
+                <div style={{ fontSize: 13, color: "#AEAEB2", marginBottom: 16 }}>Post a flyer deal or scan a bill and share prices with the community</div>
+                <button onClick={() => router.push("/post-deal")} style={{ background: "linear-gradient(135deg,#FF9F0A,#D4800A)", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>📷 Post First Deal</button>
+              </div>
+            )}
+            {!loading && filtered.length === 0 && (items.length > 0 || phItems.length > 0) && (
+              <div style={{ textAlign: "center", padding: "40px 0" }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1C1C1E" }}>No matches</div>
+                <button onClick={clrAll} style={{ background: "none", border: "none", color: "#FF9F0A", fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Clear filters</button>
+              </div>
+            )}
 
             {/* ── LIST VIEW — Grouped by item with expandable stores ── */}
             {view === "list" && Object.entries(grouped).map(([category, itemGroups]) => (
@@ -293,7 +265,7 @@ function DealsContent() {
                               {sav && <span style={{ fontSize: 9, fontWeight: 600, color: "#30D158" }}>-{sav}%</span>}
                               {dl !== null && dl <= 3 && <span style={{ fontSize: 9, fontWeight: 600, color: "#FF3B30" }}>⏰{dl === 0 ? "Last day" : `${dl}d`}</span>}
                             </div>
-                            <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2 }}>{src(cheapestItem.source)} · {ago(cheapestItem.created_at)} ago</div>
+                            <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2 }}>{src(cheapestItem.source, cheapestItem.from_price_history)} · {ago(cheapestItem.created_at)} ago{cheapestItem.store_city ? ` · ${cheapestItem.store_city}` : ""}</div>
                           </div>
                           <div style={{ textAlign: "right", flexShrink: 0 }}>
                             <div style={{ fontSize: 17, fontWeight: 700, color: "#FF9F0A" }}>${cheapestItem.price?.toFixed(2)}</div>
@@ -326,7 +298,7 @@ function DealsContent() {
                               <div style={{ width: 3, height: 32, borderRadius: 2, background: storeColor, flexShrink: 0 }} />
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: "#6D6D72" }}>{store.brand?.name}</div>
-                                <div style={{ fontSize: 10, color: "#AEAEB2" }}>{src(store.source)} · {ago(store.created_at)} ago</div>
+                                <div style={{ fontSize: 10, color: "#AEAEB2" }}>{src(store.source, store.from_price_history)} · {ago(store.created_at)} ago</div>
                               </div>
                               <div style={{ textAlign: "right", flexShrink: 0 }}>
                                 <div style={{ fontSize: 15, fontWeight: 700, color: "#1C1C1E" }}>${store.price?.toFixed(2)}</div>
@@ -344,6 +316,73 @@ function DealsContent() {
                 </div>
               </div>
             ))}
+
+            {/* ── COMMUNITY PRICES (list view, shown when searching) ── */}
+            {view === "list" && Object.keys(communityGrouped).length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 2 }}>
+                  <div style={{ height: 1, flex: 1, background: "#F2F2F7" }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#AEAEB2", letterSpacing: 0.5 }}>🧾 COMMUNITY PRICES FROM SCANNED BILLS</span>
+                  <div style={{ height: 1, flex: 1, background: "#F2F2F7" }} />
+                </div>
+                <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                  {Object.entries(communityGrouped).map(([itemKey, storeItems], idx, arr) => {
+                    const cheapest = storeItems[0];
+                    const others = storeItems.slice(1);
+                    const isExpanded = expandedItems.has(`ph-${itemKey}`);
+                    const inCart = !!cart.find(i => i.id === cheapest.id);
+                    return (
+                      <div key={itemKey} style={{ borderBottom: idx < arr.length - 1 ? "0.5px solid #F2F2F7" : "none" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
+                          <div style={{ width: 3, height: 40, borderRadius: 2, background: "#30D158", flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cheapest.name}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2, flexWrap: "wrap" as const }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "#6D6D72" }}>{cheapest.brand?.name}</span>
+                              {cheapest.store_city && <span style={{ fontSize: 11, color: "#AEAEB2" }}>· {cheapest.store_city}</span>}
+                            </div>
+                            <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2 }}>🧾 Community · {ago(cheapest.created_at)} ago</div>
+                          </div>
+                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                            <div style={{ fontSize: 17, fontWeight: 700, color: "#FF9F0A" }}>${cheapest.price?.toFixed(2)}</div>
+                            <div style={{ fontSize: 10, color: "#AEAEB2" }}>/{cheapest.unit || "ea"}</div>
+                          </div>
+                          <button onClick={() => addItem(cheapest)} style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, background: inCart ? "#F2F2F7" : "#FF9F0A", color: inCart ? "#AEAEB2" : "#fff" }}>
+                            {inCart ? "✓" : "+ Add"}
+                          </button>
+                        </div>
+                        {others.length > 0 && (
+                          <button onClick={() => toggleExpand(`ph-${itemKey}`)} style={{ width: "100%", background: isExpanded ? "rgba(48,209,88,0.04)" : "#FAFAFA", border: "none", borderTop: "0.5px solid #F2F2F7", padding: "8px 16px", fontSize: 12, fontWeight: 600, color: "#6D6D72", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span>{isExpanded ? "Hide" : `▼ Also at ${others.length} more store${others.length > 1 ? "s" : ""}`}</span>
+                            <span style={{ fontSize: 11 }}>{!isExpanded && others.map(s => `${s.brand?.name} $${s.price?.toFixed(2)}`).join(" · ")}{isExpanded && "▲ Collapse"}</span>
+                          </button>
+                        )}
+                        {isExpanded && others.map((store, si) => {
+                          const storeInCart = !!cart.find(i => i.id === store.id);
+                          const diff = (store.price - cheapest.price).toFixed(2);
+                          return (
+                            <div key={store.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px 10px 32px", background: "#F9F9F9", borderTop: "0.5px solid #F2F2F7" }}>
+                              <div style={{ width: 3, height: 32, borderRadius: 2, background: "#30D158", flexShrink: 0 }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#6D6D72" }}>{store.brand?.name}{store.store_city ? ` · ${store.store_city}` : ""}</div>
+                                <div style={{ fontSize: 10, color: "#AEAEB2" }}>🧾 Community · {ago(store.created_at)} ago</div>
+                              </div>
+                              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                <div style={{ fontSize: 15, fontWeight: 700, color: "#1C1C1E" }}>${store.price?.toFixed(2)}</div>
+                                <div style={{ fontSize: 10, color: "#FF3B30", fontWeight: 600 }}>+${diff} more</div>
+                              </div>
+                              <button onClick={() => addItem(store)} style={{ padding: "6px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, background: "#F2F2F7", color: storeInCart ? "#AEAEB2" : "#1C1C1E", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                                {storeInCart ? "✓" : "+ Add"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* ── TABLE VIEW ── */}
             {view === "table" && Object.entries(grouped).map(([category, itemGroups]) => (
@@ -366,7 +405,7 @@ function DealsContent() {
                               <td style={{ ...S, textAlign: "right" as const }}><span style={{ fontSize: 15, fontWeight: 700, color: "#FF9F0A" }}>${cheapestItem.price?.toFixed(2)}</span></td>
                               <td style={{ ...S, textAlign: "right" as const }}>{cheapestItem.regular_price ? <span style={{ fontSize: 11, color: "#AEAEB2", textDecoration: "line-through" }}>${cheapestItem.regular_price?.toFixed(2)}</span> : <span style={{ color: "#AEAEB2" }}>—</span>}</td>
                               <td style={S}>{sav ? <span style={{ fontSize: 10, fontWeight: 600, color: "#30D158", background: "rgba(48,209,88,0.1)", borderRadius: 20, padding: "2px 8px" }}>-{sav}%</span> : <span style={{ color: "#AEAEB2" }}>—</span>}</td>
-                              <td style={{ ...S, fontSize: 11, color: "#AEAEB2" }}>{src(cheapestItem.source)}</td>
+                              <td style={{ ...S, fontSize: 11, color: "#AEAEB2" }}>{src(cheapestItem.source, cheapestItem.from_price_history)}</td>
                               <td style={S}>{storeItems.length > 1 ? <span style={{ fontSize: 10, fontWeight: 600, color: "#6D6D72", background: "#F2F2F7", borderRadius: 20, padding: "2px 8px" }}>{storeItems.length} stores</span> : <span style={{ color: "#AEAEB2", fontSize: 11 }}>1 store</span>}</td>
                               <td style={S}><button onClick={() => addItem(cheapestItem)} style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: inCart ? "#F2F2F7" : "#FF9F0A", color: inCart ? "#AEAEB2" : "#fff", whiteSpace: "nowrap" as const }}>{inCart ? "✓" : "+ Add"}</button></td>
                             </tr>
@@ -402,7 +441,7 @@ function DealsContent() {
                             <div style={{ fontSize: 20, fontWeight: 800, color: "#FF9F0A" }}>${cheapestItem.price?.toFixed(2)}<span style={{ fontSize: 10, color: "#AEAEB2", fontWeight: 400 }}>/{cheapestItem.unit || "ea"}</span></div>
                             <div style={{ fontSize: 11, fontWeight: 600, color: "#FF9F0A", marginTop: 2 }}>🏆 {cheapestItem.brand?.name}</div>
                             {storeItems.length > 1 && <div style={{ fontSize: 10, color: "#6D6D72", marginTop: 2 }}>+{storeItems.length - 1} more store{storeItems.length > 2 ? "s" : ""}</div>}
-                            <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2, marginBottom: 8 }}>{src(cheapestItem.source)}</div>
+                            <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2, marginBottom: 8 }}>{src(cheapestItem.source, cheapestItem.from_price_history)}</div>
                             <button onClick={() => addItem(cheapestItem)} style={{ width: "100%", padding: "8px", borderRadius: 9, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: inCart ? "#F2F2F7" : "#FF9F0A", color: inCart ? "#AEAEB2" : "#fff" }}>
                               {inCart ? "✓ Added" : "+ Add Best Price"}
                             </button>
@@ -414,65 +453,6 @@ function DealsContent() {
                 </div>
               </div>
             ))}
-          </>
-        )}
-
-        {/* ─── COMPARE TAB ─── */}
-        {tab === "compare" && (
-          <>
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              <input style={{ flex: 1, background: "#fff", border: "none", borderRadius: 12, padding: "12px 16px", fontSize: 15, color: "#1C1C1E", outline: "none", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }} value={cq} onChange={e => setCq(e.target.value)} onKeyDown={e => e.key === "Enter" && doCompare()} placeholder="Search toor dal, rice, ghee..." />
-              <button onClick={() => doCompare()} style={{ background: "linear-gradient(135deg,#FF9F0A,#D4800A)", color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const }}>Compare</button>
-            </div>
-            {cLoading && <div style={{ textAlign: "center", padding: "40px 0", color: "#AEAEB2" }}>Finding best prices...</div>}
-            {!cLoading && cResults.length === 0 && cq && <div style={{ textAlign: "center", padding: "60px 0" }}><div style={{ fontSize: 44, marginBottom: 12 }}>⚖️</div><div style={{ fontSize: 15, fontWeight: 600, color: "#1C1C1E" }}>No results found</div></div>}
-            {cResults.length > 0 && (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, color: "#AEAEB2", fontWeight: 500 }}>{cResults.length} stores · cheapest first</div>
-                  <div style={{ display: "flex", background: "#fff", borderRadius: 10, padding: 2, gap: 1, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                    {([["list", "≡"], ["table", "⊞"], ["cards", "▦"]] as const).map(([v, icon]) => (
-                      <button key={v} onClick={() => setView(v)} style={{ width: 32, height: 30, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, background: view === v ? "#F2F2F7" : "transparent", color: view === v ? "#1C1C1E" : "#AEAEB2", display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column" as const, gap: 10 }}>
-                  {cResults.map((item, i) => {
-                    const color = STORE_COLORS[item.brand?.slug] || "#FF9F0A";
-                    const extra = i > 0 ? (item.price - cheapest).toFixed(2) : null;
-                    const inCart = !!cart.find((c: any) => c.id === item.id);
-                    const dl = item.deal?.sale_end ? Math.ceil((new Date(item.deal.sale_end).getTime() - Date.now()) / 86400000) : null;
-                    return (
-                      <div key={item.id} style={{ background: "#fff", border: `1px solid ${i === 0 ? "rgba(255,159,10,0.4)" : "rgba(0,0,0,0.06)"}`, borderRadius: 14, padding: "14px 16px", position: "relative", boxShadow: i === 0 ? "0 2px 12px rgba(255,159,10,0.1)" : "0 1px 3px rgba(0,0,0,0.04)" }}>
-                        {i === 0 && <div style={{ position: "absolute", top: -9, left: 14, background: "linear-gradient(135deg,#FF9F0A,#D4800A)", color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 10px", borderRadius: 20 }}>🏆 BEST PRICE</div>}
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                          <div style={{ width: 26, height: 26, borderRadius: "50%", background: i === 0 ? "rgba(255,159,10,0.12)" : "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: i === 0 ? "#FF9F0A" : "#AEAEB2", flexShrink: 0 }}>{i + 1}</div>
-                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 6 }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1E", marginBottom: 1 }}>{item.name}</div>
-                            <div style={{ fontSize: 13, color: "#6D6D72" }}>{item.brand?.name}</div>
-                            <div style={{ fontSize: 11, color: "#AEAEB2", marginTop: 2 }}>{src(item.source)} · {ago(item.created_at)} ago</div>
-                            {dl !== null && dl >= 0 && dl <= 7 && <span style={{ fontSize: 10, fontWeight: 600, background: dl <= 2 ? "rgba(255,59,48,0.1)" : "rgba(255,159,10,0.1)", color: dl <= 2 ? "#FF3B30" : "#FF9F0A", borderRadius: 20, padding: "2px 7px", marginTop: 4, display: "inline-block" }}>⏰{dl === 0 ? "Last day" : `${dl}d`}</span>}
-                          </div>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <div style={{ fontSize: 21, fontWeight: 700, color: i === 0 ? "#FF9F0A" : "#1C1C1E" }}>${item.price?.toFixed(2)}</div>
-                            <div style={{ fontSize: 10, color: "#AEAEB2" }}>/{item.unit || "ea"}</div>
-                            {extra && <div style={{ fontSize: 11, color: "#FF3B30", fontWeight: 600 }}>+${extra}</div>}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-                          <button onClick={() => { if (cart.find((c: any) => c.id === item.id)) { toast("Already in cart"); return; } addToCart({ id: item.id, name: item.name, price: item.price, unit: item.unit || "ea", store: item.brand?.name || "", store_slug: item.brand?.slug || "", category: item.category || "Other", icon: "🛒" }); toast.success("Added"); }} style={{ padding: "8px 16px", borderRadius: 10, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", background: inCart ? "#F2F2F7" : "#FF9F0A", color: inCart ? "#AEAEB2" : "#fff" }}>
-                            {inCart ? "✓ Added" : "+ Add to Cart"}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </>
-        )}
       </div>
     </div>
   );

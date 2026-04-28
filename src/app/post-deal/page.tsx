@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseAuth } from "@/lib/supabase";
 import toast from "react-hot-toast";
 
 const CATS = ["Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household","Other"];
@@ -21,8 +21,8 @@ interface DealItem {
   confidence: number;
 }
 
-interface Brand { id: string; name: string; slug: string; }
-interface Location { id: string; branch_name: string; city: string; zip: string; }
+interface Brand { id: string; name: string; slug: string; website?: string; phone?: string; }
+interface Location { id: string; branch_name: string; address?: string; city: string; state?: string; zip: string; phone?: string; lat?: number; lng?: number; map_link?: string; }
 
 function ConfidenceBadge({ score }: { score: number }) {
   const color = score >= 80 ? "#30D158" : score >= 60 ? "#FF9F0A" : "#FF3B30";
@@ -68,6 +68,23 @@ export default function PostDealPage() {
   const [editingId, setEditingId] = useState<string|null>(null);
   const [showFlyer, setShowFlyer] = useState(true);
   const [zoom, setZoom] = useState(1);
+  const [showAddBrand, setShowAddBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newBrandWebsite, setNewBrandWebsite] = useState("");
+  const [newBrandPhone, setNewBrandPhone] = useState("");
+  const [addingBrand, setAddingBrand] = useState(false);
+  const [showAddLoc, setShowAddLoc] = useState(false);
+  const [newLocBranch, setNewLocBranch] = useState("");
+  const [newLocAddress, setNewLocAddress] = useState("");
+  const [newLocCity, setNewLocCity] = useState("");
+  const [newLocState, setNewLocState] = useState("");
+  const [newLocZip, setNewLocZip] = useState("");
+  const [newLocPhone, setNewLocPhone] = useState("");
+  const [newLocLat, setNewLocLat] = useState<number|null>(null);
+  const [newLocLng, setNewLocLng] = useState<number|null>(null);
+  const [newLocMapLink, setNewLocMapLink] = useState("");
+  const [lookingUpLoc, setLookingUpLoc] = useState(false);
+  const [addingLoc, setAddingLoc] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(()=>{ fetchBrands(); },[]);
@@ -78,8 +95,66 @@ export default function PostDealPage() {
   }
 
   async function fetchLocations(brandId:string) {
-    const{data}=await supabase.from("store_locations").select("id,branch_name,city,zip").eq("brand_id",brandId).order("city");
+    const{data}=await supabase.from("store_locations").select("id,branch_name,address,city,state,zip,phone,lat,lng,map_link").eq("brand_id",brandId).order("city");
     setLocations(data||[]);
+  }
+
+  function toSlug(name:string){ return name.toLowerCase().trim().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,""); }
+
+  async function lookupLocation() {
+    const q = [newLocAddress, newLocCity, newLocZip, "US"].filter(Boolean).join(", ");
+    if (!q.replace(/,\s*/g,"").trim()) { toast.error("Enter address or zip first"); return; }
+    setLookingUpLoc(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&addressdetails=1&countrycodes=us`).then(r=>r.json());
+      if (!res?.length) { toast.error("Location not found"); setLookingUpLoc(false); return; }
+      const d = res[0]; const addr = d.address||{};
+      const lat = parseFloat(d.lat), lng = parseFloat(d.lon);
+      if (addr.city||addr.town||addr.suburb) setNewLocCity(addr.city||addr.town||addr.suburb||"");
+      if (addr.state) setNewLocState(addr.state);
+      if (addr.postcode) setNewLocZip(addr.postcode);
+      setNewLocLat(lat); setNewLocLng(lng);
+      setNewLocMapLink(`https://maps.google.com/maps?q=${lat},${lng}`);
+      toast.success("Location details auto-filled ✓");
+    } catch { toast.error("Could not look up location"); }
+    setLookingUpLoc(false);
+  }
+
+  async function createBrand() {
+    const name = newBrandName.trim();
+    if (!name) { toast.error("Enter store name"); return; }
+    setAddingBrand(true);
+    const slug = toSlug(name);
+    const { data, error } = await supabase.from("brands").insert({ name, slug, website:newBrandWebsite.trim()||null, phone:newBrandPhone.trim()||null }).select("id,name,slug").single();
+    if (error) {
+      if (error.code==="23505") toast.error("A store with that name already exists");
+      else toast.error("Could not create store");
+      setAddingBrand(false); return;
+    }
+    await fetchBrands();
+    setSelectedBrand(data); fetchLocations(data.id);
+    setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
+    toast.success(`✦ ${name} added`);
+    setAddingBrand(false);
+  }
+
+  async function createLocation() {
+    if (!selectedBrand) return;
+    const city = newLocCity.trim();
+    if (!city) { toast.error("Enter city"); return; }
+    setAddingLoc(true);
+    const branch_name = newLocBranch.trim() || `${selectedBrand.name} - ${city}`;
+    const { error } = await supabase.from("store_locations").insert({
+      brand_id:selectedBrand.id, branch_name,
+      address:newLocAddress.trim()||null, city, state:newLocState.trim()||null,
+      zip:newLocZip.trim(), phone:newLocPhone.trim()||null,
+      lat:newLocLat, lng:newLocLng, map_link:newLocMapLink||null,
+    });
+    if (error) { toast.error("Could not add location"); setAddingLoc(false); return; }
+    await fetchLocations(selectedBrand.id);
+    setNewLocBranch(""); setNewLocAddress(""); setNewLocCity(""); setNewLocState(""); setNewLocZip(""); setNewLocPhone(""); setNewLocLat(null); setNewLocLng(null); setNewLocMapLink(""); setShowAddLoc(false);
+    toast.success("Location added");
+    setAddingLoc(false);
   }
 
   function handleFiles(newFiles: FileList|null) {
@@ -232,14 +307,19 @@ export default function PostDealPage() {
       }
       if(skippedCount>0) toast(`⚠️ ${skippedCount} duplicate item${skippedCount>1?"s":""} skipped`);
 
+      const{data:{session}}=await supabaseAuth.auth.getSession();
+      if(!session?.user?.id){toast.error("You must be signed in to post deals");setPublishing(false);return;}
+
       const{data:deal,error:de}=await supabase.from("deals").insert({
-        brand_id:selectedBrand.id,status:"approved",applies_to_all_locations:locationMode==="all",
-        sale_start:saleStart,sale_end:saleEnd||null,
+        brand_id:selectedBrand.id,
+        posted_by:session.user.id,
+        status:"approved",
+        applies_to_all_locations:locationMode==="all",
+        sale_start:saleStart,
+        sale_end:saleEnd||null,
       }).select("id").single();
-      if(de||!deal?.id)throw new Error(de?.message||"Failed to create deal");
-      if(locationMode==="specific"&&selectedLocs.length>0){
-        await supabase.from("deal_locations").insert(selectedLocs.map(lid=>({deal_id:deal.id,location_id:lid})));
-      }
+      if(de||!deal?.id) throw new Error(de?.message||"Failed to create deal");
+
       const{error:ie}=await supabase.from("deal_items").insert(itemsToPublish.map(i=>({
         deal_id:deal.id,name:i.name.trim(),
         normalized_name:normalizeStr(i.normalized_name||i.name),
@@ -247,10 +327,14 @@ export default function PostDealPage() {
         category:VALID_CATS.includes(i.category)?i.category:"Other",
         notes:i.notes||null,source:uploadMode==="image"?"flyer":"manual",
       })));
-      if(ie)throw new Error(ie.message);
+      if(ie) throw new Error(ie.message);
+
       toast.success(`🚀 ${itemsToPublish.length} deal${itemsToPublish.length>1?"s":""} published!`);
       router.push("/deals");
-    }catch(e:any){toast.error(e.message);}
+    }catch(e:any){
+      console.error("Publish error:", e);
+      toast.error(e.message||"Failed to publish. Check console for details.");
+    }
     setPublishing(false);
   }
 
@@ -463,7 +547,7 @@ export default function PostDealPage() {
               <div style={{background:"#fff",borderRadius:16,padding:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
                 <div style={{fontSize:15,fontWeight:600,color:"#1C1C1E",marginBottom:16}}>Store & Location</div>
                 <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>SELECT STORE</div>
-                <div style={{display:"flex",flexDirection:"column" as const,gap:6,marginBottom:20}}>
+                <div style={{display:"flex",flexDirection:"column" as const,gap:6,marginBottom:10}}>
                   {brands.map(b=>(
                     <div key={b.id} onClick={()=>{setSelectedBrand(b);setSelectedLocs([]);fetchLocations(b.id);}}
                       style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:selectedBrand?.id===b.id?"rgba(255,159,10,0.06)":"#F9F9F9",borderRadius:12,cursor:"pointer",border:selectedBrand?.id===b.id?"1.5px solid rgba(255,159,10,0.4)":"1.5px solid transparent",transition:"all 0.15s"}}>
@@ -473,6 +557,35 @@ export default function PostDealPage() {
                     </div>
                   ))}
                 </div>
+                {showAddBrand?(
+                  <div style={{padding:"14px",background:"rgba(255,159,10,0.05)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,marginBottom:16}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>NEW STORE</div>
+                    <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
+                      <input value={newBrandName} onChange={e=>setNewBrandName(e.target.value)} autoFocus
+                        placeholder="Store name *"
+                        style={{background:"#fff",border:"1px solid rgba(255,159,10,0.4)",borderRadius:9,padding:"9px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                      <input value={newBrandWebsite} onChange={e=>setNewBrandWebsite(e.target.value)}
+                        placeholder="Website (e.g. walmart.com)"
+                        style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"9px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                      <input value={newBrandPhone} onChange={e=>setNewBrandPhone(e.target.value)}
+                        placeholder="Phone (optional)"
+                        style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"9px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={createBrand} disabled={addingBrand||!newBrandName.trim()}
+                          style={{flex:2,padding:"9px",background:"#FF9F0A",border:"none",borderRadius:9,fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",opacity:!newBrandName.trim()?0.5:1}}>
+                          {addingBrand?"Adding...":"Add Store"}
+                        </button>
+                        <button onClick={()=>setShowAddBrand(false)}
+                          style={{flex:1,padding:"9px",background:"#F2F2F7",border:"none",borderRadius:9,fontSize:13,color:"#6D6D72",cursor:"pointer"}}>Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+                ):(
+                  <button onClick={()=>setShowAddBrand(true)}
+                    style={{width:"100%",padding:"11px 16px",background:"rgba(255,159,10,0.04)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,fontSize:13,fontWeight:600,color:"#FF9F0A",cursor:"pointer",textAlign:"left" as const,marginBottom:16}}>
+                    + Add New Store
+                  </button>
+                )}
                 {selectedBrand&&(
                   <>
                     <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>VALID AT</div>
@@ -488,7 +601,9 @@ export default function PostDealPage() {
                             style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:selectedLocs.includes(loc.id)?"rgba(255,159,10,0.06)":"#F9F9F9",borderRadius:12,cursor:"pointer",border:selectedLocs.includes(loc.id)?"1.5px solid rgba(255,159,10,0.4)":"1.5px solid transparent"}}>
                             <div style={{flex:1}}>
                               <div style={{fontSize:14,fontWeight:600,color:"#1C1C1E"}}>{loc.branch_name}</div>
-                              <div style={{fontSize:12,color:"#6D6D72"}}>{loc.city} · {loc.zip}</div>
+                              <div style={{fontSize:12,color:"#6D6D72"}}>{loc.address?`${loc.address}, `:""}{loc.city}{loc.state?`, ${loc.state}`:""}{loc.zip?` ${loc.zip}`:""}</div>
+                              {loc.phone&&<div style={{fontSize:11,color:"#AEAEB2"}}>📞 {loc.phone}</div>}
+                              {loc.map_link&&<a href={loc.map_link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:11,color:"#0A84FF",fontWeight:500,textDecoration:"none"}}>🗺️ View on map ↗</a>}
                             </div>
                             <div style={{width:22,height:22,borderRadius:"50%",background:selectedLocs.includes(loc.id)?"#FF9F0A":"#E5E5EA",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#fff",fontWeight:700}}>
                               {selectedLocs.includes(loc.id)?"✓":""}
@@ -497,7 +612,52 @@ export default function PostDealPage() {
                         ))}
                       </div>
                     )}
-                    {locationMode==="specific"&&locations.length===0&&<div style={{fontSize:13,color:"#AEAEB2",textAlign:"center",padding:"16px 0",marginBottom:16}}>No branches found for this store</div>}
+                    {locationMode==="specific"&&locations.length===0&&<div style={{fontSize:13,color:"#AEAEB2",textAlign:"center",padding:"8px 0"}}>No branches yet</div>}
+                    {locationMode==="specific"&&(showAddLoc?(
+                      <div style={{padding:"14px",background:"rgba(255,159,10,0.05)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,marginBottom:12}}>
+                        <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>NEW LOCATION</div>
+                        <div style={{display:"flex",flexDirection:"column" as const,gap:7}}>
+                          <input value={newLocBranch} onChange={e=>setNewLocBranch(e.target.value)} placeholder="Branch name (optional)" autoFocus
+                            style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                          <input value={newLocAddress} onChange={e=>setNewLocAddress(e.target.value)} placeholder="Street address"
+                            style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                          <div style={{display:"flex",gap:6}}>
+                            <input value={newLocCity} onChange={e=>setNewLocCity(e.target.value)} placeholder="City *"
+                              style={{flex:2,background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                            <input value={newLocState} onChange={e=>setNewLocState(e.target.value.toUpperCase().slice(0,2))} placeholder="ST" maxLength={2}
+                              style={{width:48,background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 8px",fontSize:13,color:"#1C1C1E",outline:"none",textAlign:"center" as const}}/>
+                            <input value={newLocZip} onChange={e=>setNewLocZip(e.target.value.replace(/\D/g,"").slice(0,5))} placeholder="ZIP" maxLength={5}
+                              style={{width:72,background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 10px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                          </div>
+                          <input value={newLocPhone} onChange={e=>setNewLocPhone(e.target.value)} placeholder="Phone (optional)"
+                            style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                          <button onClick={lookupLocation} disabled={lookingUpLoc}
+                            style={{width:"100%",padding:"9px",background:"rgba(10,132,255,0.08)",border:"1px solid rgba(10,132,255,0.2)",borderRadius:9,fontSize:12,fontWeight:600,color:"#0A84FF",cursor:"pointer"}}>
+                            {lookingUpLoc?"🔍 Looking up...":"📍 Auto-fill from address / zip"}
+                          </button>
+                          {newLocMapLink&&(
+                            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"rgba(48,209,88,0.06)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:9}}>
+                              <span>🗺️</span>
+                              <a href={newLocMapLink} target="_blank" rel="noreferrer" style={{flex:1,fontSize:12,color:"#30D158",fontWeight:600,textDecoration:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>View on Google Maps ↗</a>
+                              {newLocLat&&<span style={{fontSize:10,color:"#AEAEB2",flexShrink:0}}>{newLocLat.toFixed(4)}, {newLocLng?.toFixed(4)}</span>}
+                            </div>
+                          )}
+                          <div style={{display:"flex",gap:6}}>
+                            <button onClick={createLocation} disabled={addingLoc||!newLocCity.trim()}
+                              style={{flex:2,padding:"9px",background:"#FF9F0A",border:"none",borderRadius:9,fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",opacity:!newLocCity.trim()?0.5:1}}>
+                              {addingLoc?"Saving...":"Save Location"}
+                            </button>
+                            <button onClick={()=>setShowAddLoc(false)}
+                              style={{flex:1,padding:"9px",background:"#F2F2F7",border:"none",borderRadius:9,fontSize:13,color:"#6D6D72",cursor:"pointer"}}>Cancel</button>
+                          </div>
+                        </div>
+                      </div>
+                    ):(
+                      <button onClick={()=>setShowAddLoc(true)}
+                        style={{width:"100%",padding:"10px 14px",background:"rgba(255,159,10,0.04)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:10,fontSize:12,fontWeight:600,color:"#FF9F0A",cursor:"pointer",textAlign:"left" as const,marginBottom:12}}>
+                        + Add New Location
+                      </button>
+                    ))}
                   </>
                 )}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>

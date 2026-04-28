@@ -67,11 +67,96 @@ export default function ScanPage() {
   const [sharePrices, setSharePrices] = useState(true);
   const [manualTotal, setManualTotal] = useState<number|null>(null);
   const [editTotal, setEditTotal] = useState(false);
+  const [brands, setBrands] = useState<any[]>([]);
+  const [linkedBrand, setLinkedBrand] = useState<any>(null);
+  const [showAddBrand, setShowAddBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [addingBrand, setAddingBrand] = useState(false);
+  const [locations, setLocations] = useState<any[]>([]);
+  const [linkedLocation, setLinkedLocation] = useState<any>(null);
+  const [newBrandWebsite, setNewBrandWebsite] = useState("");
+  const [newBrandPhone, setNewBrandPhone] = useState("");
+  const [showAddLoc, setShowAddLoc] = useState(false);
+  const [newLocBranch, setNewLocBranch] = useState("");
+  const [newLocAddress, setNewLocAddress] = useState("");
+  const [newLocCity, setNewLocCity] = useState("");
+  const [newLocState, setNewLocState] = useState("");
+  const [newLocZip, setNewLocZip] = useState("");
+  const [newLocPhone, setNewLocPhone] = useState("");
+  const [newLocLat, setNewLocLat] = useState<number|null>(null);
+  const [newLocLng, setNewLocLng] = useState<number|null>(null);
+  const [newLocMapLink, setNewLocMapLink] = useState("");
+  const [lookingUpLoc, setLookingUpLoc] = useState(false);
+  const [addingLoc, setAddingLoc] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(()=>{
+    supabase.from("brands").select("id,name,slug").order("name").then(({data})=>setBrands(data||[]));
+  },[]);
+
+  async function fetchBrandLocations(brandId:string) {
+    const {data}=await supabase.from("store_locations").select("id,branch_name,address,city,state,zip,phone,lat,lng,map_link").eq("brand_id",brandId).order("city");
+    setLocations(data||[]);
+  }
+
+  function toSlug(name:string){ return name.toLowerCase().trim().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,""); }
+
+  async function lookupLocation() {
+    const q = [newLocAddress, newLocCity, newLocZip, "US"].filter(Boolean).join(", ");
+    if (!q.replace(/,\s*/g,"").trim()) { toast.error("Enter address or zip first"); return; }
+    setLookingUpLoc(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&addressdetails=1&countrycodes=us`).then(r=>r.json());
+      if (!res?.length) { toast.error("Location not found"); setLookingUpLoc(false); return; }
+      const d = res[0]; const addr = d.address||{};
+      const lat = parseFloat(d.lat), lng = parseFloat(d.lon);
+      if (addr.city||addr.town||addr.suburb) setNewLocCity(addr.city||addr.town||addr.suburb||"");
+      if (addr.state) setNewLocState(addr.state);
+      if (addr.postcode) setNewLocZip(addr.postcode);
+      setNewLocLat(lat); setNewLocLng(lng);
+      setNewLocMapLink(`https://maps.google.com/maps?q=${lat},${lng}`);
+      toast.success("Location details auto-filled ✓");
+    } catch { toast.error("Could not look up location"); }
+    setLookingUpLoc(false);
+  }
+
+  async function createBrand() {
+    const name = newBrandName.trim();
+    if (!name) { toast.error("Enter store name"); return; }
+    setAddingBrand(true);
+    const { data, error } = await supabase.from("brands").insert({ name, slug:toSlug(name), website:newBrandWebsite.trim()||null, phone:newBrandPhone.trim()||null }).select("id,name,slug").single();
+    if (error) { toast.error(error.code==="23505"?"Store already exists":"Could not create store"); setAddingBrand(false); return; }
+    setBrands(prev=>[...prev,data].sort((a,b)=>a.name.localeCompare(b.name)));
+    setLinkedBrand(data); setLinkedLocation(null); fetchBrandLocations(data.id);
+    setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
+    toast.success(`✦ ${name} added`);
+    setAddingBrand(false);
+  }
+
+  async function createLocation() {
+    if (!linkedBrand) return;
+    const city = newLocCity.trim();
+    if (!city) { toast.error("Enter city"); return; }
+    setAddingLoc(true);
+    const branch_name = newLocBranch.trim() || `${linkedBrand.name} - ${city}`;
+    const { data, error } = await supabase.from("store_locations").insert({
+      brand_id:linkedBrand.id, branch_name,
+      address:newLocAddress.trim()||null, city, state:newLocState.trim()||null,
+      zip:newLocZip.trim(), phone:newLocPhone.trim()||null,
+      lat:newLocLat, lng:newLocLng, map_link:newLocMapLink||null,
+    }).select("id,branch_name,address,city,state,zip,phone,lat,lng,map_link").single();
+    if (error) { toast.error("Could not add location"); setAddingLoc(false); return; }
+    setLocations(prev=>[...prev,data]);
+    setLinkedLocation(data);
+    setNewLocBranch(""); setNewLocAddress(""); setNewLocCity(""); setNewLocState(""); setNewLocZip(""); setNewLocPhone(""); setNewLocLat(null); setNewLocLng(null); setNewLocMapLink(""); setShowAddLoc(false);
+    toast.success("Location added");
+    setAddingLoc(false);
+  }
 
   function handleFile(f: File) {
     setFile(f); setPreview(URL.createObjectURL(f));
-    setResult(null); setSaved(false); setItems([]); setBillNumber(""); setDupWarn(null); setStep("upload");
+    setResult(null); setSaved(false); setItems([]); setBillNumber(""); setDupWarn(null);
+    setLinkedBrand(null); setLinkedLocation(null); setLocations([]); setStep("upload");
   }
 
   function toB64(f: File): Promise<string> {
@@ -166,13 +251,15 @@ export default function ScanPage() {
         })));
       }
 
-      if (sharePrices&&result.store_name) {
+      if (sharePrices&&(result.store_name||linkedBrand)) {
+        const storeNameForHistory = linkedBrand?.name||result.store_name;
+        const storeCityForHistory = linkedLocation?.city||result.store_city||"";
         const phItems = items.filter(i=>i.unit_price>0&&i.name.trim()).map(i=>({
           normalized_name:i.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""),
-          item_name:i.name.trim(),store_name:result.store_name,
-          store_city:result.store_city||"",price:i.unit_price,
-          unit:i.unit,currency:result.currency||"USD",source:"receipt",
-          recorded_at:new Date().toISOString(),
+          item_name:i.name.trim(),category:i.category||"Other",
+          store_name:storeNameForHistory,store_city:storeCityForHistory,
+          price:i.unit_price,unit:i.unit,currency:result.currency||"USD",
+          source:"receipt",recorded_at:new Date().toISOString(),
         }));
         if (phItems.length) await supabase.from("price_history").insert(phItems);
       }
@@ -277,6 +364,108 @@ export default function ScanPage() {
                     )}
                   </div>
                 )}
+
+                {/* Link to Store Brand */}
+                <div style={{background:"var(--surf)",borderRadius:12,padding:"12px 16px",marginBottom:12,boxShadow:"var(--shadow)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>🏪 Link to Store</div>
+                    {linkedBrand&&<span style={{fontSize:11,color:"#30D158",fontWeight:600}}>✓ {linkedBrand.name}</span>}
+                  </div>
+                  {!showAddBrand?(
+                    <div style={{display:"flex",gap:6,marginBottom:linkedBrand?10:0}}>
+                      <select value={linkedBrand?.id||""} onChange={e=>{const b=brands.find(b=>b.id===e.target.value)||null;setLinkedBrand(b);setLinkedLocation(null);if(b)fetchBrandLocations(b.id);else setLocations([]);}}
+                        style={{flex:1,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:9,padding:"9px 10px",fontSize:13,color:"var(--text)",outline:"none",cursor:"pointer"}}>
+                        <option value="">— Select store —</option>
+                        {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                      <button onClick={()=>{setShowAddBrand(true);setNewBrandName(result?.store_name||"");}}
+                        style={{padding:"9px 12px",background:"rgba(255,159,10,0.1)",border:"none",borderRadius:9,fontSize:12,fontWeight:600,color:"#FF9F0A",cursor:"pointer",whiteSpace:"nowrap" as const}}>
+                        + New
+                      </button>
+                    </div>
+                  ):(
+                    <div style={{display:"flex",flexDirection:"column" as const,gap:7,marginBottom:10,padding:"12px",background:"rgba(255,159,10,0.04)",border:"1px dashed rgba(255,159,10,0.3)",borderRadius:10}}>
+                      <input value={newBrandName} onChange={e=>setNewBrandName(e.target.value)} autoFocus placeholder="Store name *"
+                        style={{background:"var(--bg)",border:"1px solid rgba(255,159,10,0.4)",borderRadius:8,padding:"8px 10px",fontSize:13,color:"var(--text)",outline:"none"}}/>
+                      <input value={newBrandWebsite} onChange={e=>setNewBrandWebsite(e.target.value)} placeholder="Website (e.g. walmart.com)"
+                        style={{background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,padding:"8px 10px",fontSize:13,color:"var(--text)",outline:"none"}}/>
+                      <input value={newBrandPhone} onChange={e=>setNewBrandPhone(e.target.value)} placeholder="Phone (optional)"
+                        style={{background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,padding:"8px 10px",fontSize:13,color:"var(--text)",outline:"none"}}/>
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={createBrand} disabled={addingBrand||!newBrandName.trim()}
+                          style={{flex:2,padding:"8px",background:"#FF9F0A",border:"none",borderRadius:8,fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",opacity:!newBrandName.trim()?0.5:1}}>
+                          {addingBrand?"Adding...":"Add Store"}
+                        </button>
+                        <button onClick={()=>setShowAddBrand(false)}
+                          style={{flex:1,padding:"8px",background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,fontSize:12,color:"var(--text2)",cursor:"pointer"}}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                  {linkedBrand&&(
+                    <>
+                      <div style={{fontSize:10,fontWeight:600,color:"var(--text3)",marginBottom:6}}>LOCATION (optional)</div>
+                      {!showAddLoc?(
+                        <div>
+                          <div style={{display:"flex",gap:6,marginBottom:linkedLocation?.map_link?6:0}}>
+                            <select value={linkedLocation?.id||""} onChange={e=>setLinkedLocation(locations.find(l=>l.id===e.target.value)||null)}
+                              style={{flex:1,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:9,padding:"8px 10px",fontSize:12,color:"var(--text)",outline:"none",cursor:"pointer"}}>
+                              <option value="">— All / Unknown —</option>
+                              {locations.map(l=><option key={l.id} value={l.id}>{l.branch_name}{l.city?` · ${l.city}`:""}{l.zip?` ${l.zip}`:""}</option>)}
+                            </select>
+                            <button onClick={()=>setShowAddLoc(true)}
+                              style={{padding:"8px 10px",background:"rgba(255,159,10,0.1)",border:"none",borderRadius:9,fontSize:11,fontWeight:600,color:"#FF9F0A",cursor:"pointer",whiteSpace:"nowrap" as const}}>
+                              + Add
+                            </button>
+                          </div>
+                          {linkedLocation?.map_link&&(
+                            <a href={linkedLocation.map_link} target="_blank" rel="noreferrer"
+                              style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,color:"#0A84FF",fontWeight:500,textDecoration:"none",marginTop:4}}>
+                              🗺️ View on Google Maps ↗
+                            </a>
+                          )}
+                        </div>
+                      ):(
+                        <div style={{display:"flex",flexDirection:"column" as const,gap:6,padding:"10px",background:"rgba(255,159,10,0.04)",border:"1px dashed rgba(255,159,10,0.3)",borderRadius:9}}>
+                          <input value={newLocBranch} onChange={e=>setNewLocBranch(e.target.value)} placeholder="Branch name (optional)" autoFocus
+                            style={{background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,padding:"7px 10px",fontSize:12,color:"var(--text)",outline:"none"}}/>
+                          <input value={newLocAddress} onChange={e=>setNewLocAddress(e.target.value)} placeholder="Street address"
+                            style={{background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,padding:"7px 10px",fontSize:12,color:"var(--text)",outline:"none"}}/>
+                          <div style={{display:"flex",gap:5}}>
+                            <input value={newLocCity} onChange={e=>setNewLocCity(e.target.value)} placeholder="City *"
+                              style={{flex:2,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,padding:"7px 10px",fontSize:12,color:"var(--text)",outline:"none"}}/>
+                            <input value={newLocState} onChange={e=>setNewLocState(e.target.value.toUpperCase().slice(0,2))} placeholder="ST" maxLength={2}
+                              style={{width:40,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,padding:"7px 6px",fontSize:12,color:"var(--text)",outline:"none",textAlign:"center" as const}}/>
+                            <input value={newLocZip} onChange={e=>setNewLocZip(e.target.value.replace(/\D/g,"").slice(0,5))} placeholder="ZIP" maxLength={5}
+                              style={{width:64,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,padding:"7px 8px",fontSize:12,color:"var(--text)",outline:"none"}}/>
+                          </div>
+                          <input value={newLocPhone} onChange={e=>setNewLocPhone(e.target.value)} placeholder="Phone (optional)"
+                            style={{background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,padding:"7px 10px",fontSize:12,color:"var(--text)",outline:"none"}}/>
+                          <button onClick={lookupLocation} disabled={lookingUpLoc}
+                            style={{padding:"8px",background:"rgba(10,132,255,0.08)",border:"1px solid rgba(10,132,255,0.2)",borderRadius:8,fontSize:11,fontWeight:600,color:"#0A84FF",cursor:"pointer"}}>
+                            {lookingUpLoc?"🔍 Looking up...":"📍 Auto-fill from address / zip"}
+                          </button>
+                          {newLocMapLink&&(
+                            <div style={{display:"flex",alignItems:"center",gap:6,padding:"7px 9px",background:"rgba(48,209,88,0.06)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:8}}>
+                              <span style={{fontSize:12}}>🗺️</span>
+                              <a href={newLocMapLink} target="_blank" rel="noreferrer" style={{flex:1,fontSize:11,color:"#30D158",fontWeight:600,textDecoration:"none"}}>View on Google Maps ↗</a>
+                              {newLocLat&&<span style={{fontSize:9,color:"var(--text3)"}}>{newLocLat.toFixed(4)}, {newLocLng?.toFixed(4)}</span>}
+                            </div>
+                          )}
+                          <div style={{display:"flex",gap:6}}>
+                            <button onClick={createLocation} disabled={addingLoc||!newLocCity.trim()}
+                              style={{flex:2,padding:"8px",background:"#FF9F0A",border:"none",borderRadius:8,fontSize:12,fontWeight:600,color:"#fff",cursor:"pointer",opacity:!newLocCity.trim()?0.5:1}}>
+                              {addingLoc?"Saving...":"Save Location"}
+                            </button>
+                            <button onClick={()=>setShowAddLoc(false)}
+                              style={{flex:1,padding:"8px",background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:8,fontSize:12,color:"var(--text2)",cursor:"pointer"}}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
 
                 {/* Alerts */}
                 <div style={{marginBottom:10}}>

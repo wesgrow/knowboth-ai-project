@@ -242,11 +242,6 @@ export function Navbar() {
 
       {/* ── MOBILE HEADER ── */}
       <header className="mobile-header">
-        <button className="hamburger-btn" onClick={openSidebar}>
-          <div className="hamburger-line"/>
-          <div className="hamburger-line"/>
-          <div className="hamburger-line"/>
-        </button>
         <div className="mobile-logo">KNOWBOTH<span>.AI</span></div>
         <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center"}}>
           {/* Location trigger */}
@@ -278,19 +273,21 @@ export function Navbar() {
           {allNavItems.find(n=>n.href===pathname)?.icon} {allNavItems.find(n=>n.href===pathname)?.label||"Dashboard"}
         </div>
 
-        {/* Search */}
-        <div className="top-header-search">
-          <span className="top-header-search-icon">🔍</span>
-          <input
-            placeholder="Search deals, items, stores..."
-            onKeyDown={e=>{
-              if(e.key==="Enter"){
-                const v=(e.target as HTMLInputElement).value.trim();
-                if(v) router.push(`/deals?q=${encodeURIComponent(v)}`);
-              }
-            }}
-          />
-        </div>
+        {/* Search — hidden on deals page (has its own search) */}
+        {pathname !== "/deals" && (
+          <div className="top-header-search">
+            <span className="top-header-search-icon">🔍</span>
+            <input
+              placeholder="Search deals, items, stores..."
+              onKeyDown={e=>{
+                if(e.key==="Enter"){
+                  const v=(e.target as HTMLInputElement).value.trim();
+                  if(v) router.push(`/deals?q=${encodeURIComponent(v)}`);
+                }
+              }}
+            />
+          </div>
+        )}
 
         {/* Actions */}
         <div className="top-header-actions">
