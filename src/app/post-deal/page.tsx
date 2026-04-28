@@ -293,8 +293,12 @@ export default function PostDealPage() {
     if(noPrice.length>0){toast.error(`${noPrice.length} items have $0 price`);setEditingId(noPrice[0].id);setStep("review");return;}
     setPublishing(true);
     try{
-      // Deduplicate against existing deal_items for same store + sale date
       const normalizeStr=(s:string)=>s.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
+
+      const{data:{session}}=await supabaseAuth.auth.getSession();
+      if(!session?.user?.id){toast.error("You must be signed in to post deals");return;}
+
+      // Deduplicate against existing deal_items for same store + sale date
       const{data:existingDeals}=await supabase.from("deals").select("id").eq("brand_id",selectedBrand.id).eq("sale_start",saleStart);
       let itemsToPublish=items;
       let skippedCount=0;
@@ -309,13 +313,9 @@ export default function PostDealPage() {
       }
       if(itemsToPublish.length===0){
         toast.error("All items already exist for this store on this sale date");
-        setPublishing(false);
         return;
       }
       if(skippedCount>0) toast(`⚠️ ${skippedCount} duplicate item${skippedCount>1?"s":""} skipped`);
-
-      const{data:{session}}=await supabaseAuth.auth.getSession();
-      if(!session?.user?.id){toast.error("You must be signed in to post deals");setPublishing(false);return;}
 
       const{data:deal,error:de}=await supabase.from("deals").insert({
         brand_id:selectedBrand.id,
@@ -325,7 +325,10 @@ export default function PostDealPage() {
         sale_start:saleStart,
         sale_end:saleEnd||null,
       }).select("id").single();
-      if(de||!deal?.id) throw new Error(de?.message||"Failed to create deal");
+      if(de||!deal?.id){
+        console.error("deals insert error:", de);
+        throw new Error(de?.message||"Failed to create deal");
+      }
 
       const{error:ie}=await supabase.from("deal_items").insert(itemsToPublish.map(i=>({
         deal_id:deal.id,name:i.name.trim(),
@@ -334,15 +337,19 @@ export default function PostDealPage() {
         category:VALID_CATS.includes(i.category)?i.category:"Other",
         notes:i.notes||null,source:uploadMode==="image"?"flyer":"manual",
       })));
-      if(ie) throw new Error(ie.message);
+      if(ie){
+        console.error("deal_items insert error:", ie);
+        throw new Error(ie.message);
+      }
 
       toast.success(`🚀 ${itemsToPublish.length} deal${itemsToPublish.length>1?"s":""} published!`);
       router.push("/deals");
     }catch(e:any){
       console.error("Publish error:", e);
-      toast.error(e.message||"Failed to publish. Check console for details.");
+      toast.error(e.message||"Failed to publish. Check DevTools console for details.");
+    }finally{
+      setPublishing(false);
     }
-    setPublishing(false);
   }
 
   const zeroPriceCount = items.filter(i=>i.price<=0).length;
