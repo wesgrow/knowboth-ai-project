@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
+import { supabaseAuth } from "@/lib/supabase";
 
 const AVATARS=["🧑‍🍳","👩‍🛒","🧔","👩‍🌾","🧑‍💼","👨‍🍳","🙋‍♀️","🤵","👩‍💻","🧑‍🔬","👩‍🎨","🧑‍🚀"];
 const CURRENCIES=[{value:"USD",label:"US Dollar",symbol:"$"},{value:"GBP",label:"British Pound",symbol:"£"},{value:"CAD",label:"Canadian Dollar",symbol:"CA$"},{value:"AED",label:"UAE Dirham",symbol:"د.إ"},{value:"INR",label:"Indian Rupee",symbol:"₹"},{value:"SGD",label:"Singapore Dollar",symbol:"S$"},{value:"AUD",label:"Australian Dollar",symbol:"A$"},{value:"EUR",label:"Euro",symbol:"€"}];
@@ -18,7 +19,11 @@ export default function OnboardingPage() {
   const [theme,setTheme]=useState<"dark"|"light"|"auto">("light");
   const [gpsLoading,setGpsLoading]=useState(false);
 
-  useEffect(()=>{if(user)router.push("/home");},[user,router]);
+  useEffect(()=>{
+    supabaseAuth.auth.getSession().then(({data:{session}})=>{
+      if(session) router.replace("/home");
+    });
+  },[]);
 
   function next(){if(step<STEPS.length-1)setStep(s=>s+1);}
   function back(){if(step>0)setStep(s=>s-1);}

@@ -79,16 +79,24 @@ export function Navbar() {
     }catch(e){console.error("Theme save:",e);}
   }
 
+  function openSidebar(){
+    setCollapsed(false);
+    setSidebarHidden(false);
+    if(window.innerWidth<=768) setSidebarOpen(true);
+    localStorage.setItem("kb-collapsed","false");
+    localStorage.setItem("kb-sidebar-hidden","false");
+  }
+
+  function closeSidebar(){
+    setSidebarHidden(true);
+    setSidebarOpen(false);
+    localStorage.setItem("kb-sidebar-hidden","true");
+  }
+
   function toggleCollapse(){
     const next = !collapsed;
     setCollapsed(next);
     localStorage.setItem("kb-collapsed", String(next));
-  }
-
-  function toggleSidebarHidden(){
-    const next = !sidebarHidden;
-    setSidebarHidden(next);
-    localStorage.setItem("kb-sidebar-hidden", String(next));
   }
 
   async function logout(){
@@ -104,7 +112,7 @@ export function Navbar() {
   return(
     <>
       {/* Overlay */}
-      <div className={`sidebar-overlay${sidebarOpen?" show":""}`} onClick={()=>setSidebarOpen(false)}/>
+      <div className={`sidebar-overlay${sidebarOpen?" show":""}`} onClick={closeSidebar}/>
 
       {/* ── SIDEBAR ── */}
       <aside className={`sidebar${sidebarOpen?" open":""}${collapsed?" collapsed":""}${sidebarHidden?" sidebar-hidden":""}`}>
@@ -116,12 +124,14 @@ export function Navbar() {
             <div className="sidebar-logo-name">KNOWBOTH<span>.AI</span></div>
             <div className="sidebar-logo-tag">Know Your Savings. Know Your Spending.</div>
           </div>
-          <button onClick={toggleCollapse} title={collapsed?"Expand sidebar":"Collapse sidebar"}
-            style={{width:22,height:22,borderRadius:6,background:"var(--bg)",border:"0.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,color:"var(--text3)",flexShrink:0,transition:"all 0.2s"}}
+          {/* Desktop collapse */}
+          <button className="sidebar-desktop-collapse" onClick={toggleCollapse} title={collapsed?"Expand sidebar":"Collapse sidebar"}
             onMouseEnter={e=>(e.currentTarget.style.background="var(--gold)",e.currentTarget.style.color="#fff")}
             onMouseLeave={e=>(e.currentTarget.style.background="var(--bg)",e.currentTarget.style.color="var(--text3)")}>
             {collapsed?"›":"‹"}
           </button>
+          {/* Close — works on both desktop and mobile */}
+          <button className="sidebar-close-btn" onClick={closeSidebar}>✕</button>
         </div>
 
         {/* User card */}
@@ -140,7 +150,7 @@ export function Navbar() {
           {NAV_MAIN.map(item=>(
             <Link key={item.href} href={item.href}
               className={`sidebar-item${isActive(item.href)?" active":""}`}
-              onClick={()=>setSidebarOpen(false)}
+              onClick={closeSidebar}
               title={collapsed?item.label:undefined}>
               <span className="sidebar-item-icon">{item.icon}</span>
               <span className="sidebar-item-label">{item.label}</span>
@@ -153,7 +163,7 @@ export function Navbar() {
           {NAV_MORE.map(item=>(
             <Link key={item.href} href={item.href}
               className={`sidebar-item${isActive(item.href)?" active":""}`}
-              onClick={()=>setSidebarOpen(false)}
+              onClick={closeSidebar}
               title={collapsed?item.label:undefined}>
               <span className="sidebar-item-icon">{item.icon}</span>
               <span className="sidebar-item-label">{item.label}</span>
@@ -166,7 +176,7 @@ export function Navbar() {
             <span className="sidebar-item-icon">{theme==="light"?"🌙":"☀️"}</span>
             <span className="sidebar-item-label">{theme==="light"?"Dark Mode":"Light Mode"}</span>
           </div>
-          <Link href="/profile" className={`sidebar-item${isActive("/profile")?" active":""}`} onClick={()=>setSidebarOpen(false)}>
+          <Link href="/profile" className={`sidebar-item${isActive("/profile")?" active":""}`} onClick={closeSidebar}>
             <span className="sidebar-item-icon">👤</span>
             <span className="sidebar-item-label">Profile</span>
           </Link>
@@ -182,7 +192,7 @@ export function Navbar() {
 
       {/* ── MOBILE HEADER ── */}
       <header className="mobile-header">
-        <button className="hamburger-btn" onClick={()=>setSidebarOpen(true)}>
+        <button className="hamburger-btn" onClick={openSidebar}>
           <div className="hamburger-line"/>
           <div className="hamburger-line"/>
           <div className="hamburger-line"/>
@@ -200,7 +210,7 @@ export function Navbar() {
       {/* ── DESKTOP TOP HEADER ── */}
       <header className="top-header" style={{marginLeft:0}}>
         {/* Sidebar toggle */}
-        <button className="top-header-btn" onClick={toggleSidebarHidden} title={sidebarHidden?"Show sidebar":"Hide sidebar"} style={{flexShrink:0}}>
+        <button className="top-header-btn" onClick={openSidebar} title="Open sidebar" style={{flexShrink:0}}>
           <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"center",justifyContent:"center"}}>
             <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
             <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
