@@ -212,12 +212,13 @@ export default function ScanPage() {
     try {
       const {data:{session}} = await supabaseAuth.auth.getSession();
       const userId = session?.user?.id;
+      if (!userId) throw new Error("You must be signed in to save a bill");
+
       const storeName = result.store_name||"Unknown Store";
       const purchaseDate = result.purchase_date||new Date().toISOString().split("T")[0];
       const total = manualTotal || items.reduce((s,i)=>s+i.actual_price,0);
 
-      if (!force && userId) {
-        // Bill-level duplicate check: same user + store + date
+      if (!force) {
         const {data:existingBills} = await supabase
           .from("expenses")
           .select("id,bill_number,total")
@@ -226,35 +227,34 @@ export default function ScanPage() {
           .eq("purchase_date",purchaseDate);
 
         if (existingBills&&existingBills.length>0) {
-          // Strongest signal: matching bill number
           const byBillNum = billNumber
             ? existingBills.find(b=>b.bill_number&&b.bill_number===billNumber)
             : null;
-          // Secondary: matching total (within 1 cent)
           const byTotal = existingBills.find(b=>Math.abs((b.total||0)-total)<0.01);
-
           const match = byBillNum||byTotal;
           if (match) {
             setDupWarn({matchedOn: byBillNum?"bill number":"store, date & total"});
-            setSaving(false);
             return;
           }
         }
       }
 
-      const {data:expense} = await supabase.from("expenses").insert({
+      const {data:expRows, error:expErr} = await supabase.from("expenses").insert({
         user_id:userId,store_name:storeName,
         store_city:result.store_city||"",store_zip:result.store_zip||"",
         bill_number:billNumber||null,
         purchase_date:purchaseDate,
         currency:result.currency||"USD",total,items_count:items.length,source:"receipt",
-      }).select("id").single();
+      }).select("id");
+      if (expErr) { console.error("expenses insert error:", expErr); throw new Error(expErr.message||"Failed to save bill"); }
+      const expense = expRows?.[0];
 
       if (expense?.id) {
-        await supabase.from("expense_items").insert(items.map(i=>({
+        const {error:itemsErr} = await supabase.from("expense_items").insert(items.map(i=>({
           expense_id:expense.id,name:i.name,price:i.actual_price,
           quantity:i.quantity,unit:i.unit,category:i.category,
         })));
+        if (itemsErr) console.error("expense_items insert error:", itemsErr);
       }
 
       if (sharePrices&&(result.store_name||linkedBrand)) {
@@ -267,7 +267,10 @@ export default function ScanPage() {
           price:i.unit_price,unit:i.unit,currency:result.currency||"USD",
           source:"receipt",recorded_at:new Date().toISOString(),
         }));
-        if (phItems.length) await supabase.from("price_history").insert(phItems);
+        if (phItems.length) {
+          const {error:phErr} = await supabase.from("price_history").insert(phItems);
+          if (phErr) console.error("price_history insert error:", phErr);
+        }
       }
 
       const pts = 5+(items.length*2);
@@ -281,8 +284,12 @@ export default function ScanPage() {
 
       setSaved(true); setStep("confirm");
       toast.success(`✦ +${pts} pts · Bill saved!`);
-    } catch(e:any) { toast.error(e.message); }
-    setSaving(false);
+    } catch(e:any) {
+      console.error("saveBill error:", e);
+      toast.error(e.message||"Failed to save bill");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const zeroPriceCount = items.filter(i=>i.unit_price<=0).length;
