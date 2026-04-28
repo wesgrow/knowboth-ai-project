@@ -296,6 +296,20 @@ input,select,textarea{font-family:inherit;}
 .prof-item:hover{background:var(--bg);}
 .prof-item:last-child{border-bottom:none;}
 
+/* ── LOCATION DROPDOWN ── */
+.loc-dropdown{
+  position:fixed;
+  top:calc(var(--header-h) + 8px);
+  left:16px;right:16px;
+  background:var(--surf);border-radius:14px;
+  box-shadow:var(--shadow-md);
+  padding:14px 14px 12px;
+  z-index:400;border:0.5px solid var(--border);
+}
+@media(min-width:769px){
+  .loc-dropdown{left:auto;right:24px;width:240px;}
+}
+
 /* ── PILLS & BADGES ── */
 .pill{border-radius:20px;padding:2px 8px;font-size:10px;font-weight:600;}
 .pill.fresh-0{background:rgba(48,209,88,0.12);color:#30D158;}

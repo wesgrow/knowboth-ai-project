@@ -211,6 +211,27 @@ export default function PostDealPage() {
     if(noPrice.length>0){toast.error(`${noPrice.length} items have $0 price`);setEditingId(noPrice[0].id);setStep("review");return;}
     setPublishing(true);
     try{
+      // Deduplicate against existing deal_items for same store + sale date
+      const normalizeStr=(s:string)=>s.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
+      const{data:existingDeals}=await supabase.from("deals").select("id").eq("brand_id",selectedBrand.id).eq("sale_start",saleStart);
+      let itemsToPublish=items;
+      let skippedCount=0;
+      if(existingDeals&&existingDeals.length>0){
+        const dealIds=existingDeals.map(d=>d.id);
+        const{data:existingDealItems}=await supabase.from("deal_items").select("normalized_name,price").in("deal_id",dealIds);
+        if(existingDealItems&&existingDealItems.length>0){
+          const dupSet=new Set(existingDealItems.map(i=>`${i.normalized_name}|${i.price}`));
+          itemsToPublish=items.filter(i=>!dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
+          skippedCount=items.length-itemsToPublish.length;
+        }
+      }
+      if(itemsToPublish.length===0){
+        toast.error("All items already exist for this store on this sale date");
+        setPublishing(false);
+        return;
+      }
+      if(skippedCount>0) toast(`⚠️ ${skippedCount} duplicate item${skippedCount>1?"s":""} skipped`);
+
       const{data:deal,error:de}=await supabase.from("deals").insert({
         brand_id:selectedBrand.id,status:"approved",applies_to_all_locations:locationMode==="all",
         sale_start:saleStart,sale_end:saleEnd||null,
@@ -219,15 +240,15 @@ export default function PostDealPage() {
       if(locationMode==="specific"&&selectedLocs.length>0){
         await supabase.from("deal_locations").insert(selectedLocs.map(lid=>({deal_id:deal.id,location_id:lid})));
       }
-      const{error:ie}=await supabase.from("deal_items").insert(items.map(i=>({
+      const{error:ie}=await supabase.from("deal_items").insert(itemsToPublish.map(i=>({
         deal_id:deal.id,name:i.name.trim(),
-        normalized_name:(i.normalized_name||i.name.toLowerCase().trim()).replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""),
+        normalized_name:normalizeStr(i.normalized_name||i.name),
         price:i.price,regular_price:i.regular_price||null,unit:i.unit,
         category:VALID_CATS.includes(i.category)?i.category:"Other",
         notes:i.notes||null,source:uploadMode==="image"?"flyer":"manual",
       })));
       if(ie)throw new Error(ie.message);
-      toast.success(`🚀 ${items.length} deals published!`);
+      toast.success(`🚀 ${itemsToPublish.length} deal${itemsToPublish.length>1?"s":""} published!`);
       router.push("/deals");
     }catch(e:any){toast.error(e.message);}
     setPublishing(false);

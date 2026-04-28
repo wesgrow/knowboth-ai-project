@@ -119,24 +119,48 @@ export default function ScanPage() {
     try {
       const {data:{session}} = await supabaseAuth.auth.getSession();
       const userId = session?.user?.id;
+      const storeName = result.store_name||"Unknown Store";
+      const purchaseDate = result.purchase_date||new Date().toISOString().split("T")[0];
       const total = manualTotal || items.reduce((s,i)=>s+i.actual_price,0);
 
+      // Deduplicate: skip items already saved for same user + store + date + price
+      let itemsToSave = items;
+      let skippedCount = 0;
+      if (userId) {
+        const {data:existingExpenses} = await supabase.from("expenses").select("id").eq("user_id",userId).eq("store_name",storeName).eq("purchase_date",purchaseDate);
+        if (existingExpenses&&existingExpenses.length>0) {
+          const expIds = existingExpenses.map(e=>e.id);
+          const {data:existingItems} = await supabase.from("expense_items").select("name,price").in("expense_id",expIds);
+          if (existingItems&&existingItems.length>0) {
+            const dupSet = new Set(existingItems.map(i=>`${i.name.toLowerCase().trim()}|${i.price}`));
+            itemsToSave = items.filter(i=>!dupSet.has(`${i.name.toLowerCase().trim()}|${i.actual_price}`));
+            skippedCount = items.length-itemsToSave.length;
+          }
+        }
+      }
+      if (itemsToSave.length===0) {
+        toast.error("All items already saved for this store on this date");
+        setSaving(false);
+        return;
+      }
+      if (skippedCount>0) toast(`⚠️ ${skippedCount} duplicate item${skippedCount>1?"s":""} skipped`);
+
       const {data:expense} = await supabase.from("expenses").insert({
-        user_id:userId,store_name:result.store_name||"Unknown Store",
+        user_id:userId,store_name:storeName,
         store_city:result.store_city||"",store_zip:result.store_zip||"",
-        purchase_date:result.purchase_date||new Date().toISOString().split("T")[0],
-        currency:result.currency||"USD",total,items_count:items.length,source:"receipt",
+        purchase_date:purchaseDate,
+        currency:result.currency||"USD",total,items_count:itemsToSave.length,source:"receipt",
       }).select("id").single();
 
       if (expense?.id) {
-        await supabase.from("expense_items").insert(items.map(i=>({
+        await supabase.from("expense_items").insert(itemsToSave.map(i=>({
           expense_id:expense.id,name:i.name,price:i.actual_price,
           quantity:i.quantity,unit:i.unit,category:i.category,
         })));
       }
 
       if (sharePrices&&result.store_name) {
-        const phItems = items.filter(i=>i.unit_price>0&&i.name.trim()).map(i=>({
+        const phItems = itemsToSave.filter(i=>i.unit_price>0&&i.name.trim()).map(i=>({
           normalized_name:i.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""),
           item_name:i.name.trim(),store_name:result.store_name,
           store_city:result.store_city||"",price:i.unit_price,
@@ -146,7 +170,7 @@ export default function ScanPage() {
         if (phItems.length) await supabase.from("price_history").insert(phItems);
       }
 
-      const pts = 5+(items.length*2);
+      const pts = 5+(itemsToSave.length*2);
       addPoints(pts);
       if (userId) {
         const {data:prof} = await supabase.from("user_profiles").select("points").eq("user_id",userId).single();

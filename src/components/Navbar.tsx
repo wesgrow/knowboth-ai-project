@@ -41,6 +41,8 @@ export function Navbar() {
   const [showLocation, setShowLocation] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
   const locationRef = useRef<HTMLDivElement>(null);
+  const mobileLocBtnRef = useRef<HTMLButtonElement>(null);
+  const desktopLocBtnRef = useRef<HTMLButtonElement>(null);
   const cartCount = cart?.filter((i:any)=>!i.purchased)?.length || 0;
   const level = getLevel(user?.points||0);
 
@@ -63,7 +65,12 @@ export function Navbar() {
   // Close location dropdown on outside click
   useEffect(()=>{
     function handleClick(e:MouseEvent){
-      if(locationRef.current&&!locationRef.current.contains(e.target as Node)) setShowLocation(false);
+      const t=e.target as Node;
+      if(
+        locationRef.current&&!locationRef.current.contains(t)&&
+        mobileLocBtnRef.current&&!mobileLocBtnRef.current.contains(t)&&
+        desktopLocBtnRef.current&&!desktopLocBtnRef.current.contains(t)
+      ) setShowLocation(false);
     }
     document.addEventListener("mousedown",handleClick);
     return()=>document.removeEventListener("mousedown",handleClick);
@@ -222,7 +229,15 @@ export function Navbar() {
           <div className="hamburger-line"/>
         </button>
         <div className="mobile-logo">KNOWBOTH<span>.AI</span></div>
-        <div style={{marginLeft:"auto",display:"flex",gap:5}}>
+        <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center"}}>
+          {/* Location trigger */}
+          <button ref={mobileLocBtnRef} onClick={()=>setShowLocation(s=>!s)}
+            style={{display:"flex",alignItems:"center",gap:4,padding:"5px 9px",borderRadius:10,background:"var(--bg)",border:"0.5px solid var(--border)",cursor:"pointer",fontSize:11,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
+            <span style={{fontSize:13}}>📍</span>
+            <span style={{maxWidth:70,overflow:"hidden",textOverflow:"ellipsis"}}>{user?.city||"Location"}</span>
+            <span style={{fontSize:9,color:"var(--text3)"}}>{radius}mi</span>
+          </button>
+          {/* Cart */}
           <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")}>
             🛒{cartCount>0&&<span className="top-header-badge">{cartCount}</span>}
           </button>
@@ -262,42 +277,13 @@ export function Navbar() {
         <div className="top-header-actions">
 
           {/* Location + Radius */}
-          <div ref={locationRef} style={{position:"relative"}}>
-            <button onClick={()=>setShowLocation(s=>!s)}
-              style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:"var(--bg)",border:"0.5px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
-              <span style={{fontSize:14}}>📍</span>
-              <span>{user?.city||"Set location"}</span>
-              <span style={{fontSize:10,color:"var(--text3)",background:"var(--surf)",borderRadius:6,padding:"1px 5px"}}>{radius}mi</span>
-              <span style={{fontSize:9,color:"var(--text3)"}}>▾</span>
-            </button>
-
-            {showLocation&&(
-              <div style={{position:"absolute",top:40,right:0,background:"var(--surf)",borderRadius:14,boxShadow:"var(--shadow-md)",width:240,padding:"14px 14px 12px",zIndex:400,border:"0.5px solid var(--border)"}}>
-                {/* Current location */}
-                <div style={{fontSize:10,fontWeight:700,color:"var(--text3)",letterSpacing:0.6,marginBottom:6}}>CURRENT LOCATION</div>
-                <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:10}}>
-                  📍 {user?.city||"Unknown"}{user?.zip?`, ${user.zip}`:""}
-                </div>
-
-                {/* GPS button */}
-                <button onClick={()=>detectLocation()} disabled={locLoading}
-                  style={{width:"100%",padding:"9px",background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.25)",borderRadius:10,fontSize:12,fontWeight:600,color:"var(--green)",cursor:"pointer",marginBottom:12,opacity:locLoading?0.6:1}}>
-                  {locLoading?"⏳ Detecting...":"📡 Use my current location"}
-                </button>
-
-                {/* Radius selector */}
-                <div style={{fontSize:10,fontWeight:700,color:"var(--text3)",letterSpacing:0.6,marginBottom:6}}>SEARCH RADIUS</div>
-                <div style={{display:"flex",gap:5,flexWrap:"wrap" as const}}>
-                  {[5,10,25,50,100].map(r=>(
-                    <button key={r} onClick={()=>{updateRadius(r);}}
-                      style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"none",cursor:"pointer",background:radius===r?"var(--gold)":"var(--bg)",color:radius===r?"#fff":"var(--text2)",transition:"all 0.15s"}}>
-                      {r}mi
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <button ref={desktopLocBtnRef} onClick={()=>setShowLocation(s=>!s)}
+            style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:"var(--bg)",border:"0.5px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
+            <span style={{fontSize:14}}>📍</span>
+            <span>{user?.city||"Set location"}</span>
+            <span style={{fontSize:10,color:"var(--text3)",background:"var(--surf)",borderRadius:6,padding:"1px 5px"}}>{radius}mi</span>
+            <span style={{fontSize:9,color:"var(--text3)"}}>▾</span>
+          </button>
 
           {/* Cart */}
           <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")} title="Cart">
@@ -333,6 +319,29 @@ export function Navbar() {
           );
         })}
       </nav>
+
+      {/* ── SHARED LOCATION DROPDOWN ── */}
+      {showLocation&&(
+        <div ref={locationRef} className="loc-dropdown">
+          <div style={{fontSize:10,fontWeight:700,color:"var(--text3)",letterSpacing:0.6,marginBottom:6}}>CURRENT LOCATION</div>
+          <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:10}}>
+            📍 {user?.city||"Unknown"}{user?.zip?`, ${user.zip}`:""}
+          </div>
+          <button onClick={()=>detectLocation()} disabled={locLoading}
+            style={{width:"100%",padding:"9px",background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.25)",borderRadius:10,fontSize:12,fontWeight:600,color:"var(--green)",cursor:"pointer",marginBottom:12,opacity:locLoading?0.6:1}}>
+            {locLoading?"⏳ Detecting...":"📡 Use my current location"}
+          </button>
+          <div style={{fontSize:10,fontWeight:700,color:"var(--text3)",letterSpacing:0.6,marginBottom:6}}>SEARCH RADIUS</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap" as const}}>
+            {[5,10,25,50,100].map(r=>(
+              <button key={r} onClick={()=>updateRadius(r)}
+                style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"none",cursor:"pointer",background:radius===r?"var(--gold)":"var(--bg)",color:radius===r?"#fff":"var(--text2)",transition:"all 0.15s"}}>
+                {r}mi
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── MOBILE MORE SHEET ── */}
       {showMore&&(
