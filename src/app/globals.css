@@ -256,15 +256,27 @@ input,select,textarea{font-family:inherit;}
 
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
+  :root{
+    --header-h: 60px;
+    --nav-h: 64px;
+    --sidebar-w: 260px;
+  }
+  html{ font-size: 16px; }
   .sidebar{transform:translateX(-100%);box-shadow:none;}
   .sidebar.open{transform:translateX(0);box-shadow:var(--shadow-md);}
   .main-content{margin-left:0;}
   .top-header{display:none;}
-  .mobile-header{display:flex;}
-  .bnav{display:flex;}
+  .mobile-header{display:flex;height:var(--header-h);padding:0 18px;gap:12px;}
+  .mobile-logo{font-size:18px;}
+  .hamburger-btn{width:40px;height:40px;border-radius:10px;}
+  .hamburger-line{width:18px;height:2.5px;}
+  .bnav{display:flex;height:var(--nav-h);}
   .sidebar-desktop-collapse{display:none;}
-  .page-body{padding-bottom:80px;}
-  .page-content{padding:14px 16px;}
+  .page-body{padding-bottom:calc(var(--nav-h) + 16px);}
+  .page-content{padding:18px 18px;}
+  .btab{font-size:10px;gap:3px;}
+  .bti{font-size:22px;}
+  .top-header-btn{width:40px;height:40px;font-size:20px;}
 }
 @media(min-width:769px){
   .sidebar{transform:translateX(0)!important;}

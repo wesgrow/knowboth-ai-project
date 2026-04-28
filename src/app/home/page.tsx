@@ -110,14 +110,14 @@ export default function HomePage() {
   return (
     <>
       <div style={{background:"var(--bg)",minHeight:"100vh"}}>
-        <div style={{padding:"20px 24px",maxWidth:1200,width:"100%"}}>
+        <div style={{padding:"20px 18px",maxWidth:1200,width:"100%"}}>
 
           {/* Welcome */}
           <div style={{marginBottom:20}}>
-            <div style={{fontSize:22,fontWeight:700,color:"var(--text)",letterSpacing:-0.6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+            <div style={{fontSize:26,fontWeight:700,color:"var(--text)",letterSpacing:-0.6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
               Hi, {user?.name?.split(" ")[0]||"there"} {user?.avatar}
             </div>
-            <div style={{fontSize:13,color:"var(--text2)",marginTop:3}}>
+            <div style={{fontSize:15,color:"var(--text2)",marginTop:4}}>
               {level} · ✦ {user?.points||0} pts · 📍 {user?.city||"DFW"}
             </div>
           </div>
@@ -129,10 +129,10 @@ export default function HomePage() {
               {l:"Low Stock",v:lowStockItems.length,i:"⚠️",c:"var(--red)",h:"/stock"},
               {l:"Expiring",v:expiringCount,i:"⏰",c:"var(--gold)",h:"/deals"},
             ].map(s=>(
-              <div key={s.l} onClick={()=>router.push(s.h)} style={{background:"var(--surf)",borderRadius:14,padding:"14px 10px",textAlign:"center",cursor:"pointer",boxShadow:"var(--shadow)"}}>
-                <div style={{fontSize:20,marginBottom:4}}>{s.i}</div>
-                <div style={{fontSize:22,fontWeight:700,color:s.c}}>{loadingStats?"—":s.v}</div>
-                <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{s.l}</div>
+              <div key={s.l} onClick={()=>router.push(s.h)} style={{background:"var(--surf)",borderRadius:16,padding:"16px 10px",textAlign:"center",cursor:"pointer",boxShadow:"var(--shadow)"}}>
+                <div style={{fontSize:24,marginBottom:6}}>{s.i}</div>
+                <div style={{fontSize:26,fontWeight:700,color:s.c}}>{loadingStats?"—":s.v}</div>
+                <div style={{fontSize:13,color:"var(--text3)",marginTop:3}}>{s.l}</div>
               </div>
             ))}
           </div>
@@ -145,11 +145,11 @@ export default function HomePage() {
           </div>
 
           {/* This Month */}
-          <div style={{background:"var(--surf)",borderRadius:14,padding:"16px",marginBottom:20,boxShadow:"var(--shadow)"}}>
+          <div style={{background:"var(--surf)",borderRadius:16,padding:"18px",marginBottom:20,boxShadow:"var(--shadow)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
               <div>
-                <div style={{fontSize:11,fontWeight:600,color:"var(--text3)",letterSpacing:0.5,textTransform:"uppercase" as const}}>💰 This Month</div>
-                <div style={{fontSize:26,fontWeight:700,color:"var(--gold)",marginTop:4,letterSpacing:-0.8}}>
+                <div style={{fontSize:12,fontWeight:600,color:"var(--text3)",letterSpacing:0.5,textTransform:"uppercase" as const}}>💰 This Month</div>
+                <div style={{fontSize:28,fontWeight:700,color:"var(--gold)",marginTop:6,letterSpacing:-0.8}}>
                   {loadingStats?"Loading...":fmt(thisMonthSpent)} spent
                 </div>
               </div>
@@ -238,16 +238,16 @@ export default function HomePage() {
 
           {/* Quick Actions */}
           <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:10}}>⚡ Quick Actions</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
             {[
               {l:"Scan Bill",i:"🧾",h:"/scan",c:"#FF9F0A"},
               {l:"Post Deal",i:"📷",h:"/post-deal",c:"#30D158"},
               {l:"Compare Prices",i:"⚖️",h:"/deals",c:"#0A84FF"},
               {l:"View Expenses",i:"📊",h:"/expenses",c:"#FF9F0A"},
             ].map(a=>(
-              <button key={a.l} onClick={()=>router.push(a.h)} style={{background:"var(--surf)",border:"none",borderRadius:14,padding:"14px",cursor:"pointer",boxShadow:"var(--shadow)",display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:36,height:36,borderRadius:10,background:`${a.c}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{a.i}</div>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{a.l}</span>
+              <button key={a.l} onClick={()=>router.push(a.h)} style={{background:"var(--surf)",border:"none",borderRadius:16,padding:"16px",cursor:"pointer",boxShadow:"var(--shadow)",display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:42,height:42,borderRadius:12,background:`${a.c}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{a.i}</div>
+                <span style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>{a.l}</span>
               </button>
             ))}
           </div>
