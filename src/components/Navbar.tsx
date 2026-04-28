@@ -40,6 +40,7 @@ export function Navbar() {
   const [theme, setTheme] = useState<"light"|"dark">("light");
   const [showLocation, setShowLocation] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
+  const [manualZip, setManualZip] = useState("");
   const locationRef = useRef<HTMLDivElement>(null);
   const mobileLocBtnRef = useRef<HTMLButtonElement>(null);
   const desktopLocBtnRef = useRef<HTMLButtonElement>(null);
@@ -82,6 +83,24 @@ export function Navbar() {
       detectLocation(true);
     }
   },[user?.zip]);
+
+  async function lookupZip(){
+    const zip=manualZip.trim();
+    if(!zip){toast.error("Enter a zip code");return;}
+    setLocLoading(true);
+    try{
+      const data=await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${encodeURIComponent(zip)}&country=US&format=json&limit=1`).then(r=>r.json());
+      if(!data||data.length===0){toast.error("Zip code not found");setLocLoading(false);return;}
+      const city=data[0].display_name.split(",")[0].trim();
+      updateLocation(zip,city);
+      setManualZip("");
+      setShowLocation(false);
+      toast.success(`📍 Location set to ${city}`);
+    }catch{
+      toast.error("Could not look up zip code");
+    }
+    setLocLoading(false);
+  }
 
   async function detectLocation(silent=false){
     if(!navigator.geolocation){if(!silent)toast.error("GPS not supported");return;}
@@ -327,6 +346,23 @@ export function Navbar() {
           <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:10}}>
             📍 {user?.city||"Unknown"}{user?.zip?`, ${user.zip}`:""}
           </div>
+
+          {/* Manual zip entry */}
+          <div style={{display:"flex",gap:6,marginBottom:10}}>
+            <input
+              value={manualZip}
+              onChange={e=>setManualZip(e.target.value.replace(/\D/g,"").slice(0,5))}
+              onKeyDown={e=>e.key==="Enter"&&lookupZip()}
+              placeholder="Enter zip code"
+              maxLength={5}
+              style={{flex:1,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:9,padding:"8px 10px",fontSize:12,color:"var(--text)",outline:"none"}}
+            />
+            <button onClick={lookupZip} disabled={locLoading||manualZip.length<5}
+              style={{padding:"8px 12px",background:"var(--gold)",border:"none",borderRadius:9,fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",opacity:manualZip.length<5?0.45:1,whiteSpace:"nowrap" as const}}>
+              Go
+            </button>
+          </div>
+
           <button onClick={()=>detectLocation()} disabled={locLoading}
             style={{width:"100%",padding:"9px",background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.25)",borderRadius:10,fontSize:12,fontWeight:600,color:"var(--green)",cursor:"pointer",marginBottom:12,opacity:locLoading?0.6:1}}>
             {locLoading?"⏳ Detecting...":"📡 Use my current location"}

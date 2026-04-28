@@ -60,6 +60,8 @@ export default function ScanPage() {
   const [editingId, setEditingId] = useState<string|null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [billNumber, setBillNumber] = useState("");
+  const [dupWarn, setDupWarn] = useState<{matchedOn:string}|null>(null);
   const [zoom, setZoom] = useState(1);
   const [showBill, setShowBill] = useState(true);
   const [sharePrices, setSharePrices] = useState(true);
@@ -69,7 +71,7 @@ export default function ScanPage() {
 
   function handleFile(f: File) {
     setFile(f); setPreview(URL.createObjectURL(f));
-    setResult(null); setSaved(false); setItems([]); setStep("upload");
+    setResult(null); setSaved(false); setItems([]); setBillNumber(""); setDupWarn(null); setStep("upload");
   }
 
   function toB64(f: File): Promise<string> {
@@ -90,7 +92,7 @@ export default function ScanPage() {
         return item;
       });
       extracted.sort((a,b)=>a.confidence-b.confidence);
-      setResult(data); setItems(extracted); setManualTotal(data.total||0);
+      setResult(data); setItems(extracted); setManualTotal(data.total||0); setBillNumber(data.bill_number||"");
       setStep("review");
       toast.success(`✦ ${extracted.length} items found!`);
     } catch(e:any) { toast.error(e.message); }
@@ -114,7 +116,7 @@ export default function ScanPage() {
     setEditingId(newItem.id);
   }
 
-  async function saveBill() {
+  async function saveBill(force=false) {
     setSaving(true);
     try {
       const {data:{session}} = await supabaseAuth.auth.getSession();
@@ -123,44 +125,49 @@ export default function ScanPage() {
       const purchaseDate = result.purchase_date||new Date().toISOString().split("T")[0];
       const total = manualTotal || items.reduce((s,i)=>s+i.actual_price,0);
 
-      // Deduplicate: skip items already saved for same user + store + date + price
-      let itemsToSave = items;
-      let skippedCount = 0;
-      if (userId) {
-        const {data:existingExpenses} = await supabase.from("expenses").select("id").eq("user_id",userId).eq("store_name",storeName).eq("purchase_date",purchaseDate);
-        if (existingExpenses&&existingExpenses.length>0) {
-          const expIds = existingExpenses.map(e=>e.id);
-          const {data:existingItems} = await supabase.from("expense_items").select("name,price").in("expense_id",expIds);
-          if (existingItems&&existingItems.length>0) {
-            const dupSet = new Set(existingItems.map(i=>`${i.name.toLowerCase().trim()}|${i.price}`));
-            itemsToSave = items.filter(i=>!dupSet.has(`${i.name.toLowerCase().trim()}|${i.actual_price}`));
-            skippedCount = items.length-itemsToSave.length;
+      if (!force && userId) {
+        // Bill-level duplicate check: same user + store + date
+        const {data:existingBills} = await supabase
+          .from("expenses")
+          .select("id,bill_number,total")
+          .eq("user_id",userId)
+          .eq("store_name",storeName)
+          .eq("purchase_date",purchaseDate);
+
+        if (existingBills&&existingBills.length>0) {
+          // Strongest signal: matching bill number
+          const byBillNum = billNumber
+            ? existingBills.find(b=>b.bill_number&&b.bill_number===billNumber)
+            : null;
+          // Secondary: matching total (within 1 cent)
+          const byTotal = existingBills.find(b=>Math.abs((b.total||0)-total)<0.01);
+
+          const match = byBillNum||byTotal;
+          if (match) {
+            setDupWarn({matchedOn: byBillNum?"bill number":"store, date & total"});
+            setSaving(false);
+            return;
           }
         }
       }
-      if (itemsToSave.length===0) {
-        toast.error("All items already saved for this store on this date");
-        setSaving(false);
-        return;
-      }
-      if (skippedCount>0) toast(`⚠️ ${skippedCount} duplicate item${skippedCount>1?"s":""} skipped`);
 
       const {data:expense} = await supabase.from("expenses").insert({
         user_id:userId,store_name:storeName,
         store_city:result.store_city||"",store_zip:result.store_zip||"",
+        bill_number:billNumber||null,
         purchase_date:purchaseDate,
-        currency:result.currency||"USD",total,items_count:itemsToSave.length,source:"receipt",
+        currency:result.currency||"USD",total,items_count:items.length,source:"receipt",
       }).select("id").single();
 
       if (expense?.id) {
-        await supabase.from("expense_items").insert(itemsToSave.map(i=>({
+        await supabase.from("expense_items").insert(items.map(i=>({
           expense_id:expense.id,name:i.name,price:i.actual_price,
           quantity:i.quantity,unit:i.unit,category:i.category,
         })));
       }
 
       if (sharePrices&&result.store_name) {
-        const phItems = itemsToSave.filter(i=>i.unit_price>0&&i.name.trim()).map(i=>({
+        const phItems = items.filter(i=>i.unit_price>0&&i.name.trim()).map(i=>({
           normalized_name:i.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""),
           item_name:i.name.trim(),store_name:result.store_name,
           store_city:result.store_city||"",price:i.unit_price,
@@ -170,7 +177,7 @@ export default function ScanPage() {
         if (phItems.length) await supabase.from("price_history").insert(phItems);
       }
 
-      const pts = 5+(itemsToSave.length*2);
+      const pts = 5+(items.length*2);
       addPoints(pts);
       if (userId) {
         const {data:prof} = await supabase.from("user_profiles").select("points").eq("user_id",userId).single();
@@ -240,12 +247,22 @@ export default function ScanPage() {
                 {/* Store info */}
                 {result&&(
                   <div style={{background:"var(--surf)",borderRadius:12,padding:"12px 16px",marginBottom:12,boxShadow:"var(--shadow)"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                      <div>
-                        <div style={{fontSize:14,fontWeight:700,color:"var(--text)"}}>🏪 {result.store_name||"Unknown Store"}</div>
-                        <div style={{fontSize:11,color:"var(--text3)"}}>{result.store_city} · {result.purchase_date}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:2}}>🏪 {result.store_name||"Unknown Store"}</div>
+                        <div style={{fontSize:11,color:"var(--text3)",marginBottom:8}}>{result.store_city} · {result.purchase_date}</div>
+                        {/* Bill number — editable */}
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:10,fontWeight:700,color:"var(--text3)",whiteSpace:"nowrap" as const}}>BILL #</span>
+                          <input
+                            value={billNumber}
+                            onChange={e=>setBillNumber(e.target.value)}
+                            placeholder="Not detected — enter manually"
+                            style={{flex:1,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:7,padding:"5px 8px",fontSize:11,color:"var(--text)",outline:"none"}}
+                          />
+                        </div>
                       </div>
-                      <div style={{textAlign:"right"}}>
+                      <div style={{textAlign:"right" as const,flexShrink:0}}>
                         {editTotal
                           ?<input type="number" step="0.01" autoFocus style={{width:90,background:"var(--bg)",border:"1px solid #FF9F0A",borderRadius:8,padding:"4px 8px",fontSize:16,fontWeight:900,color:"#FF9F0A",outline:"none",textAlign:"right"}} value={manualTotal||""} onChange={e=>setManualTotal(parseFloat(e.target.value)||0)} onBlur={()=>setEditTotal(false)}/>
                           :<div onClick={()=>setEditTotal(true)} style={{fontSize:20,fontWeight:900,color:"#FF9F0A",cursor:"pointer"}} title="Tap to edit">${(manualTotal||total).toFixed(2)} ✏️</div>
@@ -358,10 +375,37 @@ export default function ScanPage() {
                   </div>
                 </div>
 
-                <button onClick={saveBill} disabled={saving||noNameCount>0||zeroPriceCount>0}
-                  style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:(noNameCount>0||zeroPriceCount>0)?0.5:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
-                  {saving?"💾 Saving...":(noNameCount>0?"Fix missing names":zeroPriceCount>0?"Fix $0 prices":"💾 Save Bill")}
-                </button>
+                {/* Duplicate warning */}
+                {dupWarn&&(
+                  <div style={{background:"rgba(255,59,48,0.06)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:14,padding:"14px 16px",marginBottom:12}}>
+                    <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12}}>
+                      <span style={{fontSize:20}}>🔁</span>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:"var(--text)",marginBottom:4}}>Duplicate bill detected</div>
+                        <div style={{fontSize:12,color:"var(--text2)",lineHeight:1.6}}>
+                          A bill from <strong>{result?.store_name||"this store"}</strong> on <strong>{result?.purchase_date||"this date"}</strong> matching the <strong>{dupWarn.matchedOn}</strong> already exists. Saving again will create a duplicate record.
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>setDupWarn(null)}
+                        style={{flex:1,padding:"10px",background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:10,fontSize:13,fontWeight:600,color:"var(--text2)",cursor:"pointer"}}>
+                        Cancel
+                      </button>
+                      <button onClick={()=>saveBill(true)} disabled={saving}
+                        style={{flex:2,padding:"10px",background:"rgba(255,59,48,0.85)",border:"none",borderRadius:10,fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",opacity:saving?0.7:1}}>
+                        {saving?"Saving...":"Save Anyway"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!dupWarn&&(
+                  <button onClick={()=>saveBill()} disabled={saving||noNameCount>0||zeroPriceCount>0}
+                    style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:(noNameCount>0||zeroPriceCount>0)?0.5:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
+                    {saving?"💾 Saving...":(noNameCount>0?"Fix missing names":zeroPriceCount>0?"Fix $0 prices":"💾 Save Bill")}
+                  </button>
+                )}
               </div>
 
               {/* Bill image */}

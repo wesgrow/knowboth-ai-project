@@ -104,32 +104,34 @@ async function callClaude(b64: string, mime: string, attempt = 1): Promise<strin
             { type:"text", text:`You are an expert receipt scanner. Extract every line item from this receipt with maximum accuracy.
 
 Return ONLY valid JSON:
-{"store_name":"","store_city":"","store_zip":"","purchase_date":"YYYY-MM-DD","currency":"USD","total":0.00,"items":[{"name":"","unit_price":0.00,"actual_price":0.00,"quantity":1,"unit":"","category":""}]}
+{"store_name":"","store_city":"","store_zip":"","bill_number":"","purchase_date":"YYYY-MM-DD","currency":"USD","total":0.00,"items":[{"name":"","unit_price":0.00,"actual_price":0.00,"quantity":1,"unit":"","category":""}]}
 
 CRITICAL RULES:
 1. NAME: Always expand abbreviations to full product names. Include brand + size/weight.
    Examples: "T DAL 4LB"→"Toor Dal 4lb", "BAS RCE 20L"→"Basmati Rice 20lb", "AMUL GHE 1L"→"Amul Ghee 1L", "CHK BRST 2LB"→"Chicken Breast 2lb", "TOMATOE"→"Tomatoes"
-   
+
 2. UNIT: Extract the EXACT unit from the receipt or product name:
    - Weight: lb, kg, oz, g
    - Volume: L, ml, gallon, pint
    - Packaging: bag, pack, box, bottle, jar, bunch, dozen, ea
    - Look for units in both the product name AND the receipt line
    - NEVER use "ea" if a real unit is visible
-   
+
 3. PRICES:
    - unit_price = price for ONE unit (e.g., $4.99/lb)
    - actual_price = total charged on receipt for this line (e.g., $9.98 for 2lb)
    - If receipt shows only one price, use it for both
    - Prices must be positive numbers with 2 decimal places
-   
+
 4. QUANTITY: Integer. How many units were purchased.
 
 5. TOTAL: The final total on the receipt (after tax if shown, before tax otherwise)
 
 6. CATEGORY: Exactly one of: Grocery, Vegetables, Fruits, Dairy, Rice & Grains, Lentils & Dals, Spices, Snacks, Beverages, Oils & Ghee, Frozen, Meat & Fish, Bakery, Gas, Restaurant, Pharmacy, Household, Electronics, Other
 
-7. Include ALL line items. Do not skip any. No trailing commas.` }
+7. BILL NUMBER: Extract the receipt, transaction, or invoice number (e.g. "#1234", "Trans: 8876", "Invoice 00042"). Leave empty string "" if not visible.
+
+8. Include ALL line items. Do not skip any. No trailing commas.` }
           ]
         }]
       }),
@@ -195,6 +197,7 @@ export async function POST(req: Request) {
       store_name: String(parsed.store_name||"Unknown Store").trim().slice(0,200),
       store_city: String(parsed.store_city||"").trim().slice(0,100),
       store_zip: String(parsed.store_zip||"").trim().slice(0,20),
+      bill_number: String(parsed.bill_number||"").trim().slice(0,100),
       purchase_date: /^\d{4}-\d{2}-\d{2}$/.test(parsed.purchase_date)
         ? parsed.purchase_date
         : new Date().toISOString().split("T")[0],
