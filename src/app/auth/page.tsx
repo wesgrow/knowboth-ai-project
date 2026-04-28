@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabaseAuth } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -11,10 +11,25 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const inFlight = useRef(false);
+  const cooldownRef = useRef<ReturnType<typeof setInterval>|null>(null);
+
+  function startCooldown(seconds: number) {
+    setCooldown(seconds);
+    cooldownRef.current = setInterval(() => {
+      setCooldown(s => {
+        if (s <= 1) { clearInterval(cooldownRef.current!); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+  }
 
   async function handleAuth() {
+    if (inFlight.current || cooldown > 0) return;
     if (!email || !password) { toast.error("Fill all fields"); return; }
     if (password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    inFlight.current = true;
     setLoading(true);
     try {
       if (mode === "signup") {
@@ -27,9 +42,17 @@ export default function AuthPage() {
         window.location.href = "/home";
       }
     } catch(e: any) {
-      toast.error(e.message || "Authentication failed");
+      const msg: string = e.message || "";
+      if (msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("too many")) {
+        toast.error("Too many attempts — please wait 60 seconds and try again.");
+        startCooldown(60);
+      } else {
+        toast.error(msg || "Authentication failed");
+        startCooldown(5);
+      }
     } finally {
       setLoading(false);
+      inFlight.current = false;
     }
   }
 
@@ -116,8 +139,8 @@ export default function AuthPage() {
         />
 
         {/* Submit */}
-        <button onClick={handleAuth} disabled={loading} style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:loading?0.7:1,boxShadow:"0 4px 12px rgba(255,159,10,0.35)",letterSpacing:-0.2}}>
-          {loading?"Loading...":mode==="login"?"Sign In →":"Create Account →"}
+        <button onClick={handleAuth} disabled={loading||cooldown>0} style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:loading||cooldown>0?"not-allowed":"pointer",opacity:loading||cooldown>0?0.6:1,boxShadow:"0 4px 12px rgba(255,159,10,0.35)",letterSpacing:-0.2}}>
+          {loading?"Loading...":cooldown>0?`Wait ${cooldown}s`:mode==="login"?"Sign In →":"Create Account →"}
         </button>
 
         {/* Forgot password */}

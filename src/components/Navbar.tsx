@@ -6,6 +6,7 @@ import { useAppStore } from "@/lib/store";
 import { supabaseAuth } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 import { getLevel } from "@/lib/utils";
+import toast from "react-hot-toast";
 
 const NAV_MAIN = [
   { href:"/home",  icon:"🏠", label:"Home" },
@@ -31,14 +32,15 @@ const BOTTOM_TABS = [
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, setUser, cart } = useAppStore();
+  const { user, setUser, cart, radius, updateLocation, updateRadius } = useAppStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [showMore, setShowMore] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const [theme, setTheme] = useState<"light"|"dark">("light");
-  const profileRef = useRef<HTMLDivElement>(null);
+  const [showLocation, setShowLocation] = useState(false);
+  const [locLoading, setLocLoading] = useState(false);
+  const locationRef = useRef<HTMLDivElement>(null);
   const cartCount = cart?.filter((i:any)=>!i.purchased)?.length || 0;
   const level = getLevel(user?.points||0);
 
@@ -58,13 +60,38 @@ export function Navbar() {
     document.documentElement.setAttribute("data-theme",saved);
   },[]);
 
+  // Close location dropdown on outside click
   useEffect(()=>{
-    function handleClick(e: MouseEvent){
-      if(profileRef.current&&!profileRef.current.contains(e.target as Node)) setShowProfile(false);
+    function handleClick(e:MouseEvent){
+      if(locationRef.current&&!locationRef.current.contains(e.target as Node)) setShowLocation(false);
     }
     document.addEventListener("mousedown",handleClick);
     return()=>document.removeEventListener("mousedown",handleClick);
   },[]);
+
+  // Auto-detect location if not previously set
+  useEffect(()=>{
+    if(user&&user.zip==="75074"&&user.city==="DFW"&&navigator.geolocation){
+      detectLocation(true);
+    }
+  },[user?.zip]);
+
+  async function detectLocation(silent=false){
+    if(!navigator.geolocation){if(!silent)toast.error("GPS not supported");return;}
+    setLocLoading(true);
+    try{
+      const pos=await new Promise<GeolocationPosition>((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000}));
+      const{latitude,longitude}=pos.coords;
+      const data=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`).then(r=>r.json());
+      const zip=data.address?.postcode||user?.zip||"75074";
+      const city=data.address?.city||data.address?.town||data.address?.suburb||user?.city||"DFW";
+      updateLocation(zip,city);
+      if(!silent)toast.success(`📍 Location set to ${city}`);
+    }catch{
+      if(!silent)toast.error("Could not detect location");
+    }
+    setLocLoading(false);
+  }
 
   async function toggleTheme(){
     const next = theme==="light"?"dark":"light";
@@ -233,47 +260,49 @@ export function Navbar() {
 
         {/* Actions */}
         <div className="top-header-actions">
-          <button className="top-header-btn" onClick={toggleTheme} title={theme==="light"?"Dark Mode":"Light Mode"}>
-            {theme==="light"?"🌙":"☀️"}
-          </button>
-          <button className="top-header-btn" onClick={()=>router.push("/chat")} title="AI Chat">💬</button>
-          <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")} title="Cart">
-            🛒{cartCount>0&&<span className="top-header-badge">{cartCount}</span>}
-          </button>
 
-          {/* Avatar + dropdown */}
-          <div ref={profileRef} style={{position:"relative"}}>
-            <button className="top-header-btn" onClick={()=>setShowProfile(!showProfile)}
-              style={{fontSize:20,background:showProfile?"var(--gold-bg)":"var(--bg)"}}>
-              {user?.avatar||"🧑‍🍳"}
+          {/* Location + Radius */}
+          <div ref={locationRef} style={{position:"relative"}}>
+            <button onClick={()=>setShowLocation(s=>!s)}
+              style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:"var(--bg)",border:"0.5px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
+              <span style={{fontSize:14}}>📍</span>
+              <span>{user?.city||"Set location"}</span>
+              <span style={{fontSize:10,color:"var(--text3)",background:"var(--surf)",borderRadius:6,padding:"1px 5px"}}>{radius}mi</span>
+              <span style={{fontSize:9,color:"var(--text3)"}}>▾</span>
             </button>
-            {showProfile&&(
-              <div className="prof-sheet">
-                {/* User info */}
-                <div style={{padding:"12px 14px",borderBottom:"0.5px solid var(--border2)"}}>
-                  <div style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{user?.name||"User"}</div>
-                  <div style={{fontSize:10,color:"var(--text3)",marginTop:1}}>{level} · ✦ {user?.points||0} pts</div>
+
+            {showLocation&&(
+              <div style={{position:"absolute",top:40,right:0,background:"var(--surf)",borderRadius:14,boxShadow:"var(--shadow-md)",width:240,padding:"14px 14px 12px",zIndex:400,border:"0.5px solid var(--border)"}}>
+                {/* Current location */}
+                <div style={{fontSize:10,fontWeight:700,color:"var(--text3)",letterSpacing:0.6,marginBottom:6}}>CURRENT LOCATION</div>
+                <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:10}}>
+                  📍 {user?.city||"Unknown"}{user?.zip?`, ${user.zip}`:""}
                 </div>
-                {[
-                  {l:"👤 My Profile",h:"/profile"},
-                  {l:"📊 Expenses",h:"/expenses"},
-                  {l:"📈 Analytics",h:"/analytics"},
-                  {l:"👥 Community",h:"/community"},
-                ].map(item=>(
-                  <div key={item.h} className="prof-item"
-                    onClick={()=>{router.push(item.h);setShowProfile(false);}}>
-                    {item.l}
-                  </div>
-                ))}
-                <div className="prof-item" onClick={toggleTheme}>
-                  {theme==="light"?"🌙 Dark Mode":"☀️ Light Mode"}
-                </div>
-                <div className="prof-item" style={{color:"var(--red)"}} onClick={logout}>
-                  🚪 Sign Out
+
+                {/* GPS button */}
+                <button onClick={()=>detectLocation()} disabled={locLoading}
+                  style={{width:"100%",padding:"9px",background:"rgba(48,209,88,0.1)",border:"1px solid rgba(48,209,88,0.25)",borderRadius:10,fontSize:12,fontWeight:600,color:"var(--green)",cursor:"pointer",marginBottom:12,opacity:locLoading?0.6:1}}>
+                  {locLoading?"⏳ Detecting...":"📡 Use my current location"}
+                </button>
+
+                {/* Radius selector */}
+                <div style={{fontSize:10,fontWeight:700,color:"var(--text3)",letterSpacing:0.6,marginBottom:6}}>SEARCH RADIUS</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap" as const}}>
+                  {[5,10,25,50,100].map(r=>(
+                    <button key={r} onClick={()=>{updateRadius(r);}}
+                      style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"none",cursor:"pointer",background:radius===r?"var(--gold)":"var(--bg)",color:radius===r?"#fff":"var(--text2)",transition:"all 0.15s"}}>
+                      {r}mi
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
           </div>
+
+          {/* Cart */}
+          <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")} title="Cart">
+            🛒{cartCount>0&&<span className="top-header-badge">{cartCount}</span>}
+          </button>
         </div>
       </header>
 

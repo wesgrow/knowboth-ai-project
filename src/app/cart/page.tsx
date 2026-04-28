@@ -14,7 +14,7 @@ const CAT_ICONS: Record<string,string> = {
 
 export default function CartPage() {
   const router = useRouter();
-  const { cart, removeFromCart, updateQty, clearCart, user } = useAppStore();
+  const { cart, removeFromCart, updateQty, clearCart, togglePurchased, moveToPantry, user } = useAppStore();
   const [showSummary, setShowSummary] = useState(false);
   const currency = user?.currency || "USD";
   const fmt = (n: number) => new Intl.NumberFormat("en-US",{style:"currency",currency}).format(n);
@@ -83,24 +83,43 @@ export default function CartPage() {
                 </div>
                 <div style={{background:"var(--surf)",borderRadius:14,overflow:"hidden",boxShadow:"var(--shadow)"}}>
                   {items.map((item,i)=>(
-                    <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:i<items.length-1?"0.5px solid var(--border2)":"none"}}>
-                      <div style={{width:38,height:38,borderRadius:10,background:`${color}12`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                    <div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:i<items.length-1?"0.5px solid var(--border2)":"none",opacity:item.purchased?0.5:1,transition:"opacity 0.2s"}}>
+
+                      {/* Mark as purchased */}
+                      <button onClick={()=>togglePurchased(item.id)}
+                        style={{width:26,height:26,borderRadius:8,border:`2px solid ${item.purchased?"var(--green)":"var(--border)"}`,background:item.purchased?"var(--green)":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}>
+                        {item.purchased&&<span style={{color:"#fff",fontSize:13,fontWeight:700}}>✓</span>}
+                      </button>
+
+                      <div style={{width:36,height:36,borderRadius:10,background:`${color}12`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>
                         {CAT_ICONS[item.category]||"📦"}
                       </div>
+
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:14,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:item.purchased?"line-through":"none"}}>{item.name}</div>
                         <div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>{item.category} · {item.unit}</div>
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                        <button onClick={()=>updateQty(item.id,item.qty-1)} style={{width:26,height:26,borderRadius:8,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:15,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-                        <span style={{fontSize:14,fontWeight:700,color:"var(--text)",minWidth:20,textAlign:"center"}}>{item.qty}</span>
-                        <button onClick={()=>updateQty(item.id,item.qty+1)} style={{width:26,height:26,borderRadius:8,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:15,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+
+                      {/* Qty */}
+                      <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+                        <button onClick={()=>updateQty(item.id,item.qty-1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                        <span style={{fontSize:13,fontWeight:700,color:"var(--text)",minWidth:18,textAlign:"center"}}>{item.qty}</span>
+                        <button onClick={()=>updateQty(item.id,item.qty+1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
                       </div>
-                      <div style={{textAlign:"right",flexShrink:0,minWidth:56}}>
-                        <div style={{fontSize:15,fontWeight:700,color:"var(--gold)"}}>{fmt((item.price||0)*item.qty)}</div>
+
+                      {/* Price + actions */}
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        <div style={{fontSize:14,fontWeight:700,color:"var(--gold)"}}>{fmt((item.price||0)*item.qty)}</div>
                         {item.qty>1&&<div style={{fontSize:10,color:"var(--text3)"}}>{fmt(item.price)}/ea</div>}
-                        <button onClick={()=>{removeFromCart(item.id);toast(`${item.name} removed`);}}
-                          style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:16,padding:"4px",flexShrink:0}}>✕</button>
+                        <div style={{display:"flex",gap:4,marginTop:4,justifyContent:"flex-end"}}>
+                          <button onClick={()=>{moveToPantry(item);toast.success(`${item.name} moved to stock`);}}
+                            title="Move to Stock"
+                            style={{background:"rgba(48,209,88,0.1)",border:"none",borderRadius:6,padding:"3px 7px",fontSize:10,fontWeight:700,color:"var(--green)",cursor:"pointer"}}>
+                            📦 Stock
+                          </button>
+                          <button onClick={()=>{removeFromCart(item.id);toast(`${item.name} removed`);}}
+                            style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:15,padding:"2px 4px"}}>✕</button>
+                        </div>
                       </div>
                     </div>
                   ))}

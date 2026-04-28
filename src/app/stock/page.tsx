@@ -42,7 +42,7 @@ interface PurchaseHistory {
 
 export default function StockPage() {
   const router = useRouter();
-  const { user, addToCart, cart } = useAppStore();
+  const { user, addToCart, cart, pantry, removeFromPantry, updatePantryQty } = useAppStore();
   const [tab, setTab] = useState<"inventory"|"history">("inventory");
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [historyItems, setHistoryItems] = useState<PurchaseHistory[]>([]);
@@ -118,7 +118,7 @@ export default function StockPage() {
     return true;
   });
 
-  const lowStock = stockItems.filter(i => i.quantity <= 1).length;
+  const lowStock = stockItems.filter(i => i.quantity <= 1).length + pantry.filter(i => i.qty <= 1).length;
   const totalValue = stockItems.reduce((s,i) => s + (i.price * i.quantity), 0);
 
   // Group stock by category
@@ -194,6 +194,39 @@ export default function StockPage() {
         {/* ── INVENTORY TAB ── */}
         {!loading&&tab==="inventory"&&(
           <>
+            {/* Pantry items moved from cart */}
+            {pantry.length>0&&(
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",letterSpacing:0.5,textTransform:"uppercase" as const,marginBottom:6,paddingLeft:2}}>
+                  🛒 From Cart ({pantry.length})
+                </div>
+                <div style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                  {pantry.filter(p=>!search||p.name.toLowerCase().includes(search.toLowerCase())).map((item,i,arr)=>(
+                    <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:i<arr.length-1?"0.5px solid #F2F2F7":"none"}}>
+                      <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,159,10,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                        {CAT_ICONS[item.category]||"📦"}
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1C1C1E",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
+                        <div style={{fontSize:11,color:"#AEAEB2",marginTop:2}}>{item.store} · {item.purchaseDate||"Today"}</div>
+                      </div>
+                      {/* Qty controls */}
+                      <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+                        <button onClick={()=>updatePantryQty(item.id,item.qty-1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"#F2F2F7",cursor:"pointer",fontSize:14,fontWeight:700,color:"#1C1C1E",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                        <span style={{fontSize:13,fontWeight:700,color:"#FF9F0A",minWidth:22,textAlign:"center"}}>{item.qty}</span>
+                        <button onClick={()=>updatePantryQty(item.id,item.qty+1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"#F2F2F7",cursor:"pointer",fontSize:14,fontWeight:700,color:"#1C1C1E",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                      </div>
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        <div style={{fontSize:14,fontWeight:700,color:"#FF9F0A"}}>{fmt(item.price)}<span style={{fontSize:10,color:"#AEAEB2",fontWeight:400}}>/{item.unit}</span></div>
+                        <button onClick={()=>{removeFromPantry(item.id);toast.success(`${item.name} removed`);}}
+                          style={{background:"none",border:"none",color:"#AEAEB2",cursor:"pointer",fontSize:14,marginTop:2}}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Category filter */}
             {stockItems.length>0&&(
               <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>

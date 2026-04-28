@@ -2,13 +2,14 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 interface CartItem { id:string;name:string;price:number;unit:string;store:string;store_slug?:string;category:string;icon:string;qty:number;purchased:boolean; }
-interface PantryItem { id:string;name:string;price:number;unit:string;store:string;category:string;icon:string;qty:number; }
+interface PantryItem { id:string;name:string;price:number;unit:string;store:string;category:string;icon:string;qty:number;purchaseDate:string; }
 interface User { name:string;avatar:string;zip:string;city:string;currency:string;theme:"dark"|"light"|"auto";points:number; }
 
 interface AppStore {
-  user:User|null; cart:CartItem[]; pantry:PantryItem[];
+  user:User|null; cart:CartItem[]; pantry:PantryItem[]; radius:number;
   setUser:(u:User)=>void;
   updateLocation:(zip:string,city:string)=>void;
+  updateRadius:(r:number)=>void;
   updateTheme:(t:"dark"|"light"|"auto")=>void;
   addToCart:(item:Omit<CartItem,"qty"|"purchased">)=>void;
   removeFromCart:(id:string)=>void;
@@ -23,9 +24,10 @@ interface AppStore {
 }
 
 export const useAppStore = create<AppStore>()(persist((set,get)=>({
-  user:null, cart:[], pantry:[],
+  user:null, cart:[], pantry:[], radius:25,
   setUser:(u)=>set({user:u}),
   updateLocation:(zip,city)=>set(s=>({user:s.user?{...s.user,zip,city}:null})),
+  updateRadius:(r)=>set({radius:r}),
   updateTheme:(t)=>set(s=>({user:s.user?{...s.user,theme:t}:null})),
   addToCart:(item)=>{const{cart}=get();if(cart.find(i=>i.id===item.id))return;set({cart:[...cart,{...item,qty:1,purchased:false}]});},
   removeFromCart:(id)=>set(s=>({cart:s.cart.filter(i=>i.id!==id)})),
@@ -34,9 +36,10 @@ export const useAppStore = create<AppStore>()(persist((set,get)=>({
   clearCart:()=>set({cart:[]}),
   moveToPantry:(item)=>{
     const{pantry}=get();
+    const today=new Date().toISOString().split("T")[0];
     const ex=pantry.find(p=>p.name===item.name);
     if(ex){set(s=>({pantry:s.pantry.map(p=>p.name===item.name?{...p,qty:p.qty+item.qty}:p),cart:s.cart.filter(i=>i.id!==item.id)}));}
-    else{set(s=>({pantry:[...s.pantry,{id:item.id,name:item.name,price:item.price,unit:item.unit,store:item.store,category:item.category,icon:item.icon,qty:item.qty}],cart:s.cart.filter(i=>i.id!==item.id)}));}
+    else{set(s=>({pantry:[...s.pantry,{id:item.id,name:item.name,price:item.price,unit:item.unit,store:item.store,category:item.category,icon:item.icon,qty:item.qty,purchaseDate:today}],cart:s.cart.filter(i=>i.id!==item.id)}));}
   },
   updatePantryQty:(id,qty)=>set(s=>({pantry:s.pantry.map(i=>i.id===id?{...i,qty:Math.max(0,qty)}:i)})),
   removeFromPantry:(id)=>set(s=>({pantry:s.pantry.filter(i=>i.id!==id)})),

@@ -259,7 +259,7 @@ input,select,textarea{font-family:inherit;}
   html{ font-size: 16px; }
   .sidebar{transform:translateX(-100%);box-shadow:none;}
   .sidebar.open{transform:translateX(0);box-shadow:var(--shadow-md);}
-  .main-content{margin-left:0;}
+  .main-content{margin-left:0;padding-bottom:calc(var(--nav-h) + 16px);}
   .top-header{display:none;}
   .mobile-header{display:flex;height:var(--header-h);padding:0 18px;gap:12px;}
   .mobile-logo{font-size:18px;}
