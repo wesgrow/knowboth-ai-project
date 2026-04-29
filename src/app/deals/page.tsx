@@ -421,20 +421,18 @@ function DealsContent() {
                     style={{ padding:"6px 14px", borderRadius:9, fontSize:12, fontWeight:600, border:"none", cursor:page===1?"default":"pointer", background:page===1?"#F2F2F7":"#fff", color:page===1?"#C8C8CC":"#1C1C1E", boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
                     ← Prev
                   </button>
-                  {Array.from({length:totalPages},(_, i)=>i+1).filter(n=>{
+                  {Array.from({length:totalPages},(_,i)=>i+1).filter(n=>{
                     if(totalPages<=7) return true;
                     if(n===1||n===totalPages) return true;
                     if(Math.abs(n-page)<=1) return true;
-                    if(n===page-2||n===page+2) return "ellipsis";
                     return false;
                   }).map((n,i,arr)=>{
-                    if(n==="ellipsis") return null;
                     const prev = arr[i-1];
-                    const showEllipsisBefore = typeof prev==="number" && (n as number)-prev>1;
+                    const showEllipsisBefore = i>0 && n-prev>1;
                     return (
                       <span key={n} style={{display:"flex",alignItems:"center",gap:4}}>
                         {showEllipsisBefore && <span style={{fontSize:12,color:"#AEAEB2",padding:"0 2px"}}>…</span>}
-                        <button onClick={()=>setPage(n as number)}
+                        <button onClick={()=>setPage(n)}
                           style={{ width:34, height:34, borderRadius:9, fontSize:12, fontWeight:700, border:"none", cursor:"pointer",
                             background: page===n ? "linear-gradient(135deg,#FF9F0A,#D4800A)" : "#fff",
                             color: page===n ? "#fff" : "#1C1C1E",
