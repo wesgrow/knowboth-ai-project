@@ -184,12 +184,34 @@ function DealsContent() {
   const TH = { padding: "9px 14px", fontSize: 11, fontWeight: 600 as const, color: "#AEAEB2", textAlign: "left" as const, letterSpacing: 0.3, textTransform: "uppercase" as const, background: "#F9F9F9", borderBottom: "0.5px solid #F2F2F7", whiteSpace: "nowrap" as const };
   return (
     <div style={{ minHeight: "100vh", background: "#F2F2F7" }} className="page-body">
+      <style>{`
+        /* Hide group-by controls on mobile to reduce toolbar clutter */
+        @media (max-width: 640px) {
+          .group-by-controls { display: none !important; }
+          .table-hint { display: block; }
+        }
+        @media (min-width: 641px) {
+          .table-hint { display: none; }
+        }
+        /* Filter panel: scrollable on small phones */
+        @media (max-width: 480px) {
+          .deals-filter-panel { max-height: 72vh; overflow-y: auto; }
+        }
+        /* Hover reset on touch devices */
+        @media (hover: none) {
+          .deal-row:hover { background: transparent !important; }
+        }
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+          * { transition-duration: 0.01ms !important; }
+        }
+      `}</style>
       <div className="container">
 
         {/* Search */}
             <div style={{ position: "relative", marginBottom: 10 }}>
               <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#AEAEB2", fontSize: 15 }}>🔍</span>
-              <input style={{ width: "100%", background: "#fff", border: "none", borderRadius: 12, padding: "12px 16px 12px 42px", fontSize: 15, color: "#1C1C1E", outline: "none", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search deals, items, stores..." />
+              <input style={{ width: "100%", background: "#fff", border: "none", borderRadius: 12, padding: "12px 16px 12px 42px", fontSize: 16, color: "#1C1C1E", outline: "none", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search deals, items, stores..." />
             </div>
 
             {/* Toolbar — single row on desktop, wraps on mobile */}
@@ -201,17 +223,20 @@ function DealsContent() {
                   style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:20, fontSize:12, fontWeight:600, cursor:"pointer", border:"none", background: showPanel||aF.length>0 ? "#FF9F0A" : "#fff", color: showPanel||aF.length>0 ? "#fff" : "#6D6D72", boxShadow:"0 1px 3px rgba(0,0,0,0.08)", whiteSpace:"nowrap" as const, flexShrink:0 }}>
                   ⚙️ {aF.length > 0 ? `${aF.length} Active` : "Filter"}
                 </button>
-                <div style={{ width:1, height:18, background:"#E5E5EA", flexShrink:0 }}/>
-                <span style={{ fontSize:11, color:"#AEAEB2", fontWeight:600, flexShrink:0 }}>Group by</span>
-                {([["category","📂 Category"],["store","🏪 Store"],["price","💰 Price"]] as const).map(([v,l]) => (
-                  <button key={v} onClick={() => setGroupBy(v)}
-                    style={{ padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:600, border:"none", cursor:"pointer", flexShrink:0,
-                      background: groupBy===v ? "#FF9F0A" : "#fff",
-                      color: groupBy===v ? "#fff" : "#6D6D72",
-                      boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
-                    {l}
-                  </button>
-                ))}
+                {/* Hidden on mobile via .group-by-controls CSS class */}
+                <div className="group-by-controls" style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <div style={{ width:1, height:18, background:"#E5E5EA", flexShrink:0 }}/>
+                  <span style={{ fontSize:11, color:"#AEAEB2", fontWeight:600, flexShrink:0 }}>Group by</span>
+                  {([["category","📂 Category"],["store","🏪 Store"],["price","💰 Price"]] as const).map(([v,l]) => (
+                    <button key={v} onClick={() => setGroupBy(v)}
+                      style={{ padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:600, border:"none", cursor:"pointer", flexShrink:0,
+                        background: groupBy===v ? "#FF9F0A" : "#fff",
+                        color: groupBy===v ? "#fff" : "#6D6D72",
+                        boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Spacer */}
@@ -257,7 +282,7 @@ function DealsContent() {
 
             {/* Filter Panel */}
             {showPanel && (
-              <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", marginBottom: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
+              <div className="deals-filter-panel" style={{ background: "#fff", borderRadius: 14, overflow: "hidden", marginBottom: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
                 <div style={{ padding: "12px 16px", borderBottom: "0.5px solid #F2F2F7" }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: "#AEAEB2", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 8 }}>Category</div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>{CATS.map(c => <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 12px", borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "none", background: cat === c ? "#FF9F0A" : "#F2F2F7", color: cat === c ? "#fff" : "#1C1C1E" }}>{c}</button>)}</div>
@@ -495,6 +520,11 @@ function DealsContent() {
             )}
 
             {/* ── TABLE VIEW ── */}
+            {view === "table" && (
+              <p className="table-hint" style={{ fontSize:12, color:"#AEAEB2", textAlign:"center", padding:"8px 0 4px", fontStyle:"italic" }}>
+                Rotate your phone for a better table view.
+              </p>
+            )}
             {view === "table" && Object.entries(grouped).map(([category, itemGroups]) => (
               <div key={category} style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "#AEAEB2", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 6, paddingLeft: 2 }}>{category}</div>

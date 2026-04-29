@@ -248,13 +248,14 @@ export function Navbar() {
         <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center"}}>
           {/* Location trigger */}
           <button ref={mobileLocBtnRef} onClick={()=>setShowLocation(s=>!s)}
+            aria-label={`Change location, currently ${user?.city||"unknown"}`}
             style={{display:"flex",alignItems:"center",gap:4,padding:"5px 9px",borderRadius:10,background:"var(--bg)",border:"0.5px solid var(--border)",cursor:"pointer",fontSize:11,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
             <span style={{fontSize:13}}>📍</span>
-            <span style={{maxWidth:70,overflow:"hidden",textOverflow:"ellipsis"}}>{user?.city||"Location"}</span>
+            <span style={{maxWidth:90,overflow:"hidden",textOverflow:"ellipsis"}}>{user?.city||"Location"}</span>
             <span style={{fontSize:9,color:"var(--text3)"}}>{radius}mi</span>
           </button>
           {/* Cart */}
-          <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")}>
+          <button className="top-header-btn" style={{position:"relative"}} aria-label={`Cart${cartCount>0?`, ${cartCount} items`:""}`} onClick={()=>router.push("/cart")}>
             🛒{cartCount>0&&<span className="top-header-badge">{cartCount}</span>}
           </button>
         </div>
@@ -263,7 +264,7 @@ export function Navbar() {
       {/* ── DESKTOP TOP HEADER ── */}
       <header className="top-header" style={{marginLeft:0}}>
         {/* Sidebar toggle */}
-        <button className="top-header-btn" onClick={openSidebar} title="Open sidebar" style={{flexShrink:0}}>
+        <button className="top-header-btn" onClick={openSidebar} title="Open sidebar" aria-label="Open navigation sidebar" style={{flexShrink:0}}>
           <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"center",justifyContent:"center"}}>
             <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
             <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
@@ -296,6 +297,7 @@ export function Navbar() {
 
           {/* Location + Radius */}
           <button ref={desktopLocBtnRef} onClick={()=>setShowLocation(s=>!s)}
+            aria-label={`Change location, currently ${user?.city||"unknown"}`}
             style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:"var(--bg)",border:"0.5px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
             <span style={{fontSize:14}}>📍</span>
             <span>{user?.city||"Set location"}</span>
@@ -304,7 +306,7 @@ export function Navbar() {
           </button>
 
           {/* Cart */}
-          <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")} title="Cart">
+          <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")} title="Cart" aria-label={`Cart${cartCount>0?`, ${cartCount} items`:""}`}>
             🛒{cartCount>0&&<span className="top-header-badge">{cartCount}</span>}
           </button>
         </div>
@@ -315,7 +317,7 @@ export function Navbar() {
         {BOTTOM_TABS.map((tab:any,i)=>{
           if(tab.scan) return(
             <div key="scan" className="nav-fab-wrap">
-              <button className="nav-fab" onClick={()=>router.push("/scan")}>🧾</button>
+              <button className="nav-fab" aria-label="Scan bill" onClick={()=>router.push("/scan")}>🧾</button>
             </div>
           );
           if(tab.more) return(
@@ -385,7 +387,7 @@ export function Navbar() {
           <div onClick={e=>e.stopPropagation()}
             style={{background:"var(--surf)",borderRadius:"18px 18px 0 0",padding:"8px 16px 36px",width:"100%",maxWidth:480}}>
             <div style={{width:32,height:3,background:"var(--border)",borderRadius:2,margin:"8px auto 16px"}}/>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(85px,1fr))",gap:8,marginBottom:12}}>
               {[...NAV_MORE,{href:"/profile",icon:"👤",label:"Profile"}].map(item=>(
                 <div key={item.href} onClick={()=>{router.push(item.href);setShowMore(false);}}
                   style={{display:"flex",flexDirection:"column" as const,alignItems:"center",gap:5,padding:"12px 8px",borderRadius:12,background:"var(--bg)",cursor:"pointer"}}>

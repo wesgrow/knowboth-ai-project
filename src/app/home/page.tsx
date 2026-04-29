@@ -196,10 +196,34 @@ export default function HomePage() {
         }
         .secondary-cta:hover { transform: translateY(-1px); border-color: var(--gold); }
         .expiring-pulse { animation: pulse 2s ease-in-out infinite; }
+
+        /* ── RESPONSIVE STEPS ROW ── */
+        .steps-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+        @media (max-width: 360px) { .steps-row { grid-template-columns: 1fr; gap: 8px; } }
+
+        /* ── PAGE CONTENT CENTERING ── */
+        .home-inner { padding: 20px 18px; max-width: 720px; width: 100%; margin: 0 auto; }
+        @media (min-width: 769px) { .home-inner { padding: 24px 28px; } }
+
+        /* ── HOVER: touch devices only ── */
+        @media (hover: none) {
+          .stat-card:hover { transform: none !important; box-shadow: var(--shadow) !important; }
+          .action-btn:hover { transform: none !important; box-shadow: var(--shadow) !important; }
+          .primary-cta:hover { transform: none !important; opacity: 1 !important; }
+          .secondary-cta:hover { transform: none !important; border-color: var(--border) !important; }
+          .deal-row:hover { background: transparent !important; }
+        }
+
+        /* ── REDUCED MOTION ── */
+        @media (prefers-reduced-motion: reduce) {
+          .fade-up { animation: none !important; opacity: 1 !important; transform: none !important; }
+          .skel { animation: none !important; background: var(--border2) !important; }
+          .expiring-pulse { animation: none !important; }
+        }
       `}</style>
 
       <div style={{background:"var(--bg)",minHeight:"100vh",paddingBottom:32}}>
-        <div style={{padding:"20px 18px",maxWidth:1200,width:"100%"}}>
+        <div className="home-inner">
 
           {/* ── HERO GREETING ── */}
           <div className="fade-up" style={{marginBottom:24,animationDelay:"0s"}}>
@@ -242,7 +266,7 @@ export default function HomePage() {
             <div className="fade-up" style={{animationDelay:"0.1s",marginBottom:24}}>
               {/* How it works */}
               <div style={{fontSize:13,fontWeight:700,color:"var(--text)",marginBottom:12,letterSpacing:0.2}}>How it works</div>
-              <div style={{display:"flex",gap:10,marginBottom:16}}>
+              <div className="steps-row">
                 {[
                   {n:"1",i:"📸",t:"Scan Bill",d:"Upload your grocery receipt"},
                   {n:"2",i:"📊",t:"Track Spending",d:"See where your money goes"},
