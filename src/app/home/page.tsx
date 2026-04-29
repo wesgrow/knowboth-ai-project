@@ -386,7 +386,7 @@ export default function HomePage() {
                 <div style={{fontSize:32,marginBottom:8}}>🏷️</div>
                 <div style={{fontSize:14,fontWeight:600,color:"var(--text)",marginBottom:4}}>No deals yet</div>
                 <div style={{fontSize:12,color:"var(--text3)",marginBottom:14}}>Be the first to post a deal from a store flyer</div>
-                <button onClick={()=>router.push("/post-deal")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:10,padding:"9px 18px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer"}}>📷 Post First Deal</button>
+                <button onClick={()=>router.push("/post-deal")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:14,padding:"9px 18px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer"}}>📷 Post First Deal</button>
               </div>
             )}
 

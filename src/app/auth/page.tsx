@@ -84,29 +84,29 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="auth-page" style={{minHeight:"100vh",background:"#F2F2F7",display:"flex",flexDirection:"column" as const,alignItems:"center",justifyContent:"center",padding:24}}>
+    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",flexDirection:"column" as const,alignItems:"center",justifyContent:"center",padding:24}}>
 
       {/* Logo */}
-      <div style={{textAlign:"center",marginBottom:36}}>
+      <div className="fade-up" style={{textAlign:"center",marginBottom:36,animationDelay:"0s"}}>
         <div style={{width:68,height:68,borderRadius:18,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,margin:"0 auto 14px",boxShadow:"0 8px 24px rgba(255,159,10,0.3)"}}>✦</div>
-        <div style={{fontSize:26,fontWeight:800,color:"#1C1C1E",letterSpacing:-0.8}}>KNOWBOTH<span style={{color:"#FF9F0A"}}>.AI</span></div>
-        <div style={{fontSize:13,color:"#6D6D72",marginTop:5}}>Know Your Savings. Know Your Spending.</div>
+        <div style={{fontSize:28,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>KNOWBOTH<span style={{color:"#FF9F0A"}}>.AI</span></div>
+        <div style={{fontSize:13,color:"var(--text2)",marginTop:5}}>Know Your Savings. Know Your Spending.</div>
       </div>
 
       {/* Card */}
-      <div style={{width:"100%",maxWidth:360,background:"#fff",borderRadius:20,padding:"24px 20px",boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
+      <div className="fade-up" style={{width:"100%",maxWidth:360,background:"var(--surf)",borderRadius:20,padding:"24px 20px",boxShadow:"0 4px 24px rgba(0,0,0,0.08)",animationDelay:"0.08s"}}>
 
         {/* Toggle */}
-        <div style={{display:"flex",background:"#F2F2F7",borderRadius:12,padding:3,marginBottom:22,gap:3}}>
+        <div style={{display:"flex",background:"var(--bg)",borderRadius:12,padding:3,marginBottom:22,gap:3}}>
           {(["login","signup"] as const).map(m=>(
-            <button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:mode===m?"#fff":"transparent",color:mode===m?"#1C1C1E":"#AEAEB2",boxShadow:mode===m?"0 1px 3px rgba(0,0,0,0.1)":"none",transition:"all 0.2s"}}>
+            <button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:mode===m?"var(--surf)":"transparent",color:mode===m?"var(--text)":"var(--text3)",boxShadow:mode===m?"0 1px 3px rgba(0,0,0,0.1)":"none",transition:"all 0.2s"}}>
               {m==="login"?"Sign In":"Sign Up"}
             </button>
           ))}
         </div>
 
         {/* Google Button */}
-        <button onClick={signInWithGoogle} disabled={googleLoading} style={{width:"100%",padding:13,background:"#fff",border:"1.5px solid #E5E5EA",borderRadius:12,fontSize:14,fontWeight:600,color:"#1C1C1E",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:16,opacity:googleLoading?0.7:1,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+        <button onClick={signInWithGoogle} disabled={googleLoading} style={{width:"100%",padding:13,background:"var(--surf)",border:"1.5px solid var(--border)",borderRadius:12,fontSize:14,fontWeight:600,color:"var(--text)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:16,opacity:googleLoading?0.7:1,boxShadow:"var(--shadow)"}}>
           {googleLoading
             ?<span style={{fontSize:14}}>Connecting...</span>
             :<><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width={18} height={18} alt="Google"/><span>Continue with Google</span></>
@@ -115,31 +115,31 @@ export default function AuthPage() {
 
         {/* Divider */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-          <div style={{flex:1,height:1,background:"#F2F2F7"}}/>
-          <span style={{fontSize:12,color:"#AEAEB2",fontWeight:500}}>or</span>
-          <div style={{flex:1,height:1,background:"#F2F2F7"}}/>
+          <div style={{flex:1,height:1,background:"var(--border2)"}}/>
+          <span style={{fontSize:12,color:"var(--text3)",fontWeight:500}}>or</span>
+          <div style={{flex:1,height:1,background:"var(--border2)"}}/>
         </div>
 
         {/* Email */}
-        <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",letterSpacing:0.5,marginBottom:6}}>EMAIL</div>
+        <div style={{fontSize:11,fontWeight:700,color:"var(--text3)",letterSpacing:0.6,textTransform:"uppercase" as const,marginBottom:6}}>Email</div>
         <input
-          style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"12px 14px",fontSize:15,color:"#1C1C1E",outline:"none",marginBottom:14}}
+          style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"12px 14px",fontSize:16,color:"var(--text)",outline:"none",marginBottom:14}}
           type="email" value={email} onChange={e=>setEmail(e.target.value)}
           placeholder="you@example.com"
           onKeyDown={e=>e.key==="Enter"&&handleAuth()}
         />
 
         {/* Password */}
-        <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",letterSpacing:0.5,marginBottom:6}}>PASSWORD</div>
+        <div style={{fontSize:11,fontWeight:700,color:"var(--text3)",letterSpacing:0.6,textTransform:"uppercase" as const,marginBottom:6}}>Password</div>
         <input
-          style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"12px 14px",fontSize:15,color:"#1C1C1E",outline:"none",marginBottom:22}}
+          style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"12px 14px",fontSize:16,color:"var(--text)",outline:"none",marginBottom:22}}
           type="password" value={password} onChange={e=>setPassword(e.target.value)}
           placeholder="••••••••"
           onKeyDown={e=>e.key==="Enter"&&handleAuth()}
         />
 
         {/* Submit */}
-        <button onClick={handleAuth} disabled={loading||cooldown>0} style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:loading||cooldown>0?"not-allowed":"pointer",opacity:loading||cooldown>0?0.6:1,boxShadow:"0 4px 12px rgba(255,159,10,0.35)",letterSpacing:-0.2}}>
+        <button onClick={handleAuth} disabled={loading||cooldown>0} style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:14,fontSize:15,fontWeight:700,color:"#fff",cursor:loading||cooldown>0?"not-allowed":"pointer",opacity:loading||cooldown>0?0.6:1,boxShadow:"0 4px 12px rgba(255,159,10,0.35)",letterSpacing:-0.2}}>
           {loading?"Loading...":cooldown>0?`Wait ${cooldown}s`:mode==="login"?"Sign In →":"Create Account →"}
         </button>
 
@@ -151,9 +151,15 @@ export default function AuthPage() {
         )}
       </div>
 
-      <div style={{marginTop:20,fontSize:11,color:"#AEAEB2",textAlign:"center"}}>
+      <div className="fade-up" style={{marginTop:20,fontSize:11,color:"var(--text3)",textAlign:"center",animationDelay:"0.16s"}}>
         By continuing, you agree to our Terms & Privacy Policy
       </div>
+
+      <style>{`
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+        .fade-up{animation:fadeInUp 0.4s ease both}
+        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}}
+      `}</style>
     </div>
   );
 }

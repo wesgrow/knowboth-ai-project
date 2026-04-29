@@ -155,7 +155,7 @@ export default function AnalyticsPage() {
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
           <div>
-            <h1 style={{fontSize:22,fontWeight:700,color:"var(--text)",letterSpacing:-0.5}}>Analytics</h1>
+            <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>Analytics</h1>
             <p style={{fontSize:13,color:"var(--text2)",marginTop:3}}>Your spending insights</p>
           </div>
           {/* Period selector */}
@@ -181,9 +181,12 @@ export default function AnalyticsPage() {
 
         {/* Loading */}
         {loading&&(
-          <div style={{textAlign:"center",padding:"60px 0",color:"var(--text3)"}}>
-            <div style={{fontSize:32,marginBottom:8}}>📊</div>
-            Loading analytics...
+          <div style={{display:"flex",flexDirection:"column" as const,gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+              {[1,2,3,4].map(i=><div key={i} className="skel" style={{height:72,borderRadius:14}}/>)}
+            </div>
+            <div className="skel" style={{height:160,borderRadius:16}}/>
+            <div className="skel" style={{height:120,borderRadius:16}}/>
           </div>
         )}
 
@@ -332,6 +335,14 @@ export default function AnalyticsPage() {
         )}
 
       </div>
+
+      <style>{`
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+        .fade-up{animation:fadeInUp 0.35s ease both}
+        .skel{background:linear-gradient(90deg,var(--border2) 25%,var(--surf) 50%,var(--border2) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear;border-radius:8px;}
+        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}.skel{animation:none!important}}
+      `}</style>
     </div>
   );
 }

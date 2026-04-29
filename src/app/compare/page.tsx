@@ -62,7 +62,7 @@ function CompareContent() {
       <div className="page-body" style={{background:"var(--bg)",minHeight:"100vh"}}>
         <div className="container" style={{padding:"20px 24px"}}>
           <div style={{marginBottom:16}}>
-            <h1 style={{fontSize:22,fontWeight:700,color:"var(--text)"}}>Price Compare</h1>
+            <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>Price Compare</h1>
             <p style={{fontSize:12,color:"var(--text-muted)",marginTop:3}}>Find cheapest store · See price source</p>
           </div>
 
@@ -132,6 +132,14 @@ function CompareContent() {
           </div>
         </div>
       </div>
+      <style>{`
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        .fade-up{animation:fadeInUp 0.35s ease both}
+        @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+        .skel{background:linear-gradient(90deg,var(--bg) 25%,var(--bg3) 50%,var(--bg) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite}
+        @media(hover:none){button:hover{opacity:1!important;transform:none!important}}
+        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}.skel{animation:none!important}}
+      `}</style>
     </>
   );
 }

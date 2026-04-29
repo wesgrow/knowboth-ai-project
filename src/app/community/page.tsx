@@ -174,141 +174,145 @@ export default function CommunityPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <div className="container" style={{ maxWidth: 680 }}>
+    <div className="page-body" style={{background:"var(--bg)"}}>
+      <div className="container" style={{maxWidth:680}}>
 
         {/* Header */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
-              <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1C1C1E", letterSpacing: -0.5 }}>Community</h1>
-              <p style={{ fontSize: 13, color: "#6D6D72", marginTop: 3 }}>Latest deals posted by the community</p>
+              <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>Community</h1>
+              <p style={{fontSize:13,color:"var(--text2)",marginTop:3}}>Latest deals posted by the community</p>
             </div>
-            <button onClick={() => router.push("/post-deal")} style={{ background: "linear-gradient(135deg,#FF9F0A,#D4800A)", color: "#fff", border: "none", borderRadius: 12, padding: "10px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 8px rgba(255,159,10,0.3)" }}>
+            <button onClick={()=>router.push("/post-deal")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:14,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
               📷 Post Deal
             </button>
           </div>
         </div>
 
-        {loading && <div style={{ textAlign: "center", padding: "60px 0", color: "#AEAEB2" }}>Loading community posts...</div>}
+        {loading&&(
+          <div style={{display:"flex",flexDirection:"column" as const,gap:16}}>
+            {[1,2,3].map(i=><div key={i} className="skel" style={{height:200,borderRadius:16}}/>)}
+          </div>
+        )}
 
-        {!loading && deals.length === 0 && (
-          <div style={{ textAlign: "center", padding: "60px 0" }}>
-            <div style={{ fontSize: 44, marginBottom: 12 }}>🏪</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "#1C1C1E", marginBottom: 8 }}>No posts yet</div>
-            <p style={{ fontSize: 13, color: "#AEAEB2", marginBottom: 16 }}>Be the first to post a deal!</p>
-            <button onClick={() => router.push("/post-deal")} style={{ background: "linear-gradient(135deg,#FF9F0A,#D4800A)", color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>📷 Post First Deal</button>
+        {!loading&&deals.length===0&&(
+          <div style={{textAlign:"center",padding:"60px 0"}}>
+            <div style={{fontSize:44,marginBottom:12}}>🏪</div>
+            <div style={{fontSize:16,fontWeight:700,color:"var(--text)",marginBottom:8}}>No posts yet</div>
+            <p style={{fontSize:13,color:"var(--text3)",marginBottom:16}}>Be the first to post a deal!</p>
+            <button onClick={()=>router.push("/post-deal")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:14,padding:"12px 24px",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>📷 Post First Deal</button>
           </div>
         )}
 
         {/* Feed */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {deals.map(deal => {
+        <div style={{display:"flex",flexDirection:"column" as const,gap:16}}>
+          {deals.map((deal,idx)=>{
             const color = STORE_COLORS[deal.brand.slug] || "#FF9F0A";
             const dl = daysLeft(deal.sale_end);
             const isExpanded = expandedItems[deal.id];
             return (
-              <div key={deal.id} style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+              <div key={deal.id} className="fade-up" style={{background:"var(--surf)",borderRadius:16,overflow:"hidden",boxShadow:"var(--shadow-md)",animationDelay:`${idx*0.06}s`}}>
 
                 {/* Post header */}
-                <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${color}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0, border: `1.5px solid ${color}33` }}>
+                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:42,height:42,borderRadius:"50%",background:`${color}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0,border:`1.5px solid ${color}33`}}>
                     {deal.posterAvatar}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: "#1C1C1E" }}>{deal.posterName}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color, background: `${color}15`, borderRadius: 20, padding: "2px 8px" }}>{deal.brand.name}</span>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:14,fontWeight:700,color:"var(--text)"}}>{deal.posterName}</span>
+                      <span style={{fontSize:11,fontWeight:600,color,background:`${color}15`,borderRadius:20,padding:"2px 8px"}}>{deal.brand.name}</span>
                     </div>
-                    <div style={{ fontSize: 11, color: "#AEAEB2", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                      {deal.location && <span>📍 {deal.location.branch_name}, {deal.location.city}</span>}
+                    <div style={{fontSize:11,color:"var(--text3)",marginTop:2,display:"flex",alignItems:"center",gap:6}}>
+                      {deal.location&&<span>📍 {deal.location.branch_name}, {deal.location.city}</span>}
                       <span>{timeAgo(deal.created_at)}</span>
-                      {dl !== null && dl >= 0 && <span style={{ color: dl <= 2 ? "#FF3B30" : "#FF9F0A", fontWeight: 600 }}>⏰ {dl === 0 ? "Last day!" : `${dl}d left`}</span>}
-                      {dl !== null && dl < 0 && <span style={{ color: "#AEAEB2" }}>Expired</span>}
+                      {dl!==null&&dl>=0&&<span style={{color:dl<=2?"#FF3B30":"#FF9F0A",fontWeight:600}}>⏰ {dl===0?"Last day!":`${dl}d left`}</span>}
+                      {dl!==null&&dl<0&&<span style={{color:"var(--text3)"}}>Expired</span>}
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color, background: `${color}12`, borderRadius: 20, padding: "4px 10px" }}>
+                  <div style={{fontSize:12,fontWeight:700,color,background:`${color}12`,borderRadius:20,padding:"4px 10px"}}>
                     {deal.items.length}+ deals
                   </div>
                 </div>
 
                 {/* Flyer image */}
-                {deal.flyer_image_url && (
-                  <div style={{ padding: "0 16px 12px" }}>
-                    <img src={deal.flyer_image_url} alt="Flyer" style={{ width: "100%", borderRadius: 12, objectFit: "cover", maxHeight: 280, cursor: "pointer" }} onClick={() => window.open(deal.flyer_image_url!, "_blank")} />
+                {deal.flyer_image_url&&(
+                  <div style={{padding:"0 16px 12px"}}>
+                    <img src={deal.flyer_image_url} alt="Flyer" style={{width:"100%",borderRadius:12,objectFit:"cover",maxHeight:280,cursor:"pointer"}} onClick={()=>window.open(deal.flyer_image_url!,"_blank")}/>
                   </div>
                 )}
 
                 {/* Description */}
-                {deal.description && <div style={{ padding: "0 16px 12px", fontSize: 14, color: "#1C1C1E", lineHeight: 1.5 }}>{deal.description}</div>}
+                {deal.description&&<div style={{padding:"0 16px 12px",fontSize:14,color:"var(--text)",lineHeight:1.5}}>{deal.description}</div>}
 
                 {/* Top deals */}
-                <div style={{ margin: "0 16px 12px", background: "#F9F9F9", borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ padding: "8px 14px", borderBottom: "0.5px solid #F2F2F7", fontSize: 11, fontWeight: 700, color: "#AEAEB2", letterSpacing: 0.5, textTransform: "uppercase" as const }}>
+                <div style={{margin:"0 16px 12px",background:"var(--bg3)",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{padding:"8px 14px",borderBottom:"0.5px solid var(--border2)",fontSize:11,fontWeight:700,color:"var(--text3)",letterSpacing:0.5,textTransform:"uppercase" as const}}>
                     🔥 Top Deals
                   </div>
-                  {(isExpanded ? deal.items : deal.items.slice(0, 3)).map((item, i) => (
-                    <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderBottom: i < (isExpanded ? deal.items.length : Math.min(3, deal.items.length)) - 1 ? "0.5px solid #F2F2F7" : "none" }}>
-                      <div style={{ width: 3, height: 28, borderRadius: 2, background: color, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
-                        <div style={{ fontSize: 11, color: "#AEAEB2" }}>{item.category}</div>
+                  {(isExpanded?deal.items:deal.items.slice(0,3)).map((item,i)=>(
+                    <div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderBottom:i<(isExpanded?deal.items.length:Math.min(3,deal.items.length))-1?"0.5px solid var(--border2)":"none"}}>
+                      <div style={{width:3,height:28,borderRadius:2,background:color,flexShrink:0}}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
+                        <div style={{fontSize:11,color:"var(--text3)"}}>{item.category}</div>
                       </div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: "#FF9F0A", flexShrink: 0 }}>${item.price?.toFixed(2)}<span style={{ fontSize: 10, color: "#AEAEB2", fontWeight: 400 }}>/{item.unit || "ea"}</span></div>
+                      <div style={{fontSize:15,fontWeight:700,color:"#FF9F0A",flexShrink:0}}>${item.price?.toFixed(2)}<span style={{fontSize:10,color:"var(--text3)",fontWeight:400}}>/{item.unit||"ea"}</span></div>
                     </div>
                   ))}
-                  {deal.items.length > 3 && (
-                    <button onClick={() => setExpandedItems(prev => ({ ...prev, [deal.id]: !prev[deal.id] }))}
-                      style={{ width: "100%", padding: "9px", background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "#FF9F0A", cursor: "pointer", borderTop: "0.5px solid #F2F2F7" }}>
-                      {isExpanded ? "Show less ▲" : `View all ${deal.items.length} deals ▼`}
+                  {deal.items.length>3&&(
+                    <button onClick={()=>setExpandedItems(prev=>({...prev,[deal.id]:!prev[deal.id]}))}
+                      style={{width:"100%",padding:"9px",background:"none",border:"none",fontSize:12,fontWeight:600,color:"#FF9F0A",cursor:"pointer",borderTop:"0.5px solid var(--border2)"}}>
+                      {isExpanded?"Show less ▲":`View all ${deal.items.length} deals ▼`}
                     </button>
                   )}
                 </div>
 
                 {/* Action bar */}
-                <div style={{ padding: "10px 16px", borderTop: "0.5px solid #F2F2F7", display: "flex", alignItems: "center", gap: 4 }}>
-                  <button onClick={() => toggleLike(deal.id, deal.userLiked)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 20, border: "none", background: deal.userLiked ? "rgba(255,59,48,0.1)" : "#F2F2F7", color: deal.userLiked ? "#FF3B30" : "#6D6D72", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                    {deal.userLiked ? "❤️" : "🤍"} {deal.likes}
+                <div style={{padding:"10px 16px",borderTop:"0.5px solid var(--border2)",display:"flex",alignItems:"center",gap:4}}>
+                  <button onClick={()=>toggleLike(deal.id,deal.userLiked)} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 12px",borderRadius:20,border:"none",background:deal.userLiked?"rgba(255,59,48,0.1)":"var(--bg)",color:deal.userLiked?"#FF3B30":"var(--text2)",fontSize:13,fontWeight:600,cursor:"pointer",transition:"all 0.15s"}}>
+                    {deal.userLiked?"❤️":"🤍"} {deal.likes}
                   </button>
-                  <button onClick={() => loadComments(deal.id)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 20, border: "none", background: showComments[deal.id] ? "rgba(10,132,255,0.1)" : "#F2F2F7", color: showComments[deal.id] ? "#0A84FF" : "#6D6D72", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  <button onClick={()=>loadComments(deal.id)} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 12px",borderRadius:20,border:"none",background:showComments[deal.id]?"rgba(10,132,255,0.1)":"var(--bg)",color:showComments[deal.id]?"#0A84FF":"var(--text2)",fontSize:13,fontWeight:600,cursor:"pointer"}}>
                     💬 {deal.comments}
                   </button>
-                  <button onClick={() => share(deal)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 20, border: "none", background: "#F2F2F7", color: "#6D6D72", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  <button onClick={()=>share(deal)} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 12px",borderRadius:20,border:"none",background:"var(--bg)",color:"var(--text2)",fontSize:13,fontWeight:600,cursor:"pointer"}}>
                     📤 Share
                   </button>
-                  <div style={{ flex: 1 }} />
-                  <button onClick={() => addAllToCart(deal)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 16px", borderRadius: 20, border: "none", background: "linear-gradient(135deg,#FF9F0A,#D4800A)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 6px rgba(255,159,10,0.3)" }}>
+                  <div style={{flex:1}}/>
+                  <button onClick={()=>addAllToCart(deal)} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 16px",borderRadius:20,border:"none",background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:"0 2px 6px rgba(255,159,10,0.3)"}}>
                     🛒 Add All
                   </button>
                 </div>
 
                 {/* Comments section */}
-                {showComments[deal.id] && (
-                  <div style={{ borderTop: "0.5px solid #F2F2F7", padding: "12px 16px" }}>
-                    {(comments[deal.id] || []).length === 0 && <div style={{ fontSize: 13, color: "#AEAEB2", textAlign: "center", padding: "8px 0" }}>No comments yet — be first!</div>}
-                    <div style={{ display: "flex", flexDirection: "column" as const, gap: 10, marginBottom: 12 }}>
-                      {(comments[deal.id] || []).map((c: any) => (
-                        <div key={c.id} style={{ display: "flex", gap: 10 }}>
-                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🧑</div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ background: "#F9F9F9", borderRadius: "0 12px 12px 12px", padding: "8px 12px" }}>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: "#AEAEB2", marginBottom: 3 }}>User {c.user_id?.slice(0, 6)}</div>
-                              <div style={{ fontSize: 13, color: "#1C1C1E" }}>{c.comment}</div>
+                {showComments[deal.id]&&(
+                  <div style={{borderTop:"0.5px solid var(--border2)",padding:"12px 16px"}}>
+                    {(comments[deal.id]||[]).length===0&&<div style={{fontSize:13,color:"var(--text3)",textAlign:"center",padding:"8px 0"}}>No comments yet — be first!</div>}
+                    <div style={{display:"flex",flexDirection:"column" as const,gap:10,marginBottom:12}}>
+                      {(comments[deal.id]||[]).map((c:any)=>(
+                        <div key={c.id} style={{display:"flex",gap:10}}>
+                          <div style={{width:30,height:30,borderRadius:"50%",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>🧑</div>
+                          <div style={{flex:1}}>
+                            <div style={{background:"var(--bg3)",borderRadius:"0 12px 12px 12px",padding:"8px 12px"}}>
+                              <div style={{fontSize:11,fontWeight:600,color:"var(--text3)",marginBottom:3}}>User {c.user_id?.slice(0,6)}</div>
+                              <div style={{fontSize:13,color:"var(--text)"}}>{c.comment}</div>
                             </div>
-                            <div style={{ fontSize: 10, color: "#AEAEB2", marginTop: 3, paddingLeft: 4 }}>{timeAgo(c.created_at)}</div>
+                            <div style={{fontSize:10,color:"var(--text3)",marginTop:3,paddingLeft:4}}>{timeAgo(c.created_at)}</div>
                           </div>
                         </div>
                       ))}
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,159,10,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
-                        {user?.avatar || "🧑"}
+                    <div style={{display:"flex",gap:8}}>
+                      <div style={{width:32,height:32,borderRadius:"50%",background:"rgba(255,159,10,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                        {user?.avatar||"🧑"}
                       </div>
-                      <div style={{ flex: 1, display: "flex", gap: 6 }}>
-                        <input style={{ flex: 1, background: "#F2F2F7", border: "none", borderRadius: 20, padding: "8px 14px", fontSize: 13, color: "#1C1C1E", outline: "none" }}
-                          value={commentText[deal.id] || ""} onChange={e => setCommentText(prev => ({ ...prev, [deal.id]: e.target.value }))}
-                          placeholder="Write a comment..." onKeyDown={e => e.key === "Enter" && postComment(deal.id)} />
-                        <button onClick={() => postComment(deal.id)} style={{ background: "#FF9F0A", border: "none", borderRadius: 20, padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>Post</button>
+                      <div style={{flex:1,display:"flex",gap:6}}>
+                        <input style={{flex:1,background:"var(--bg)",border:"none",borderRadius:20,padding:"8px 14px",fontSize:16,color:"var(--text)",outline:"none"}}
+                          value={commentText[deal.id]||""} onChange={e=>setCommentText(prev=>({...prev,[deal.id]:e.target.value}))}
+                          placeholder="Write a comment..." onKeyDown={e=>e.key==="Enter"&&postComment(deal.id)}/>
+                        <button onClick={()=>postComment(deal.id)} style={{background:"#FF9F0A",border:"none",borderRadius:20,padding:"8px 14px",fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer"}}>Post</button>
                       </div>
                     </div>
                   </div>
@@ -318,6 +322,15 @@ export default function CommunityPage() {
           })}
         </div>
       </div>
+
+      <style>{`
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+        .fade-up{animation:fadeInUp 0.35s ease both}
+        .skel{background:linear-gradient(90deg,var(--border2) 25%,var(--surf) 50%,var(--border2) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear;border-radius:8px;}
+        @media(hover:none){button:hover{opacity:1!important;transform:none!important}}
+        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}.skel{animation:none!important}}
+      `}</style>
     </div>
   );
 }

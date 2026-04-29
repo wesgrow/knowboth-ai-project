@@ -409,7 +409,6 @@ export default function PostDealPage() {
     if(noPrice.length>0){toast.error(`${noPrice.length} items have $0 price`);setEditingId(noPrice[0].id);setStep("review");return;}
     setPublishing(true);
     try{
-      // Deduplicate: check existing deals for same brand + date + location
       let query=supabase.from("deals").select("id").eq("brand_id",selectedBrand.id).eq("sale_start",saleStart);
       if(locationMode==="specific"&&selectedLocs.length===1) query=(query as any).eq("location_id",selectedLocs[0]);
       const{data:existingDeals}=await withPublishTimeout(query as any) as {data:any[]|null};
@@ -466,13 +465,13 @@ export default function PostDealPage() {
             {/* Header */}
             <div style={{marginBottom:16}}>
               <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-                <button onClick={()=>router.push("/deals")} style={{background:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontSize:13,fontWeight:600,color:"#6D6D72",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>← Back</button>
-                <h1 style={{fontSize:20,fontWeight:700,color:"#1C1C1E",letterSpacing:-0.5}}>Post a Deal</h1>
+                <button onClick={()=>router.push("/deals")} style={{background:"var(--surf)",border:"none",borderRadius:10,padding:"8px 12px",fontSize:13,fontWeight:600,color:"var(--text2)",cursor:"pointer",boxShadow:"var(--shadow)"}}>← Back</button>
+                <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>Post a Deal</h1>
                 {step==="review"&&<div style={{marginLeft:"auto",fontSize:12,fontWeight:600,color:avgConfidence>=80?"#30D158":avgConfidence>=60?"#FF9F0A":"#FF3B30"}}>Avg Confidence: {avgConfidence}%</div>}
               </div>
-              <div style={{display:"flex",gap:0,background:"#fff",borderRadius:12,padding:3,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+              <div style={{display:"flex",gap:0,background:"var(--surf)",borderRadius:12,padding:3,boxShadow:"var(--shadow)"}}>
                 {["Upload","Review","Store","Publish"].map((s,i)=>(
-                  <div key={s} style={{flex:1,padding:"8px 4px",borderRadius:10,textAlign:"center" as const,fontSize:12,fontWeight:600,background:progress===i+1?"#FF9F0A":progress>i+1?"rgba(48,209,88,0.1)":"transparent",color:progress===i+1?"#fff":progress>i+1?"#30D158":"#AEAEB2",transition:"all 0.2s"}}>
+                  <div key={s} style={{flex:1,padding:"8px 4px",borderRadius:10,textAlign:"center" as const,fontSize:12,fontWeight:600,background:progress===i+1?"#FF9F0A":progress>i+1?"rgba(48,209,88,0.1)":"transparent",color:progress===i+1?"#fff":progress>i+1?"#30D158":"var(--text3)",transition:"all 0.2s"}}>
                     {progress>i+1?"✓ ":""}{s}
                   </div>
                 ))}
@@ -481,11 +480,11 @@ export default function PostDealPage() {
 
             {/* ── STEP 1: UPLOAD ── */}
             {step==="upload"&&(
-              <div style={{background:"#fff",borderRadius:16,padding:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
-                <div style={{fontSize:15,fontWeight:600,color:"#1C1C1E",marginBottom:16}}>Upload Flyers or Paste URL</div>
-                <div style={{display:"flex",background:"#F2F2F7",borderRadius:12,padding:3,gap:3,marginBottom:16}}>
+              <div style={{background:"var(--surf)",borderRadius:16,padding:20,boxShadow:"var(--shadow)"}}>
+                <div style={{fontSize:15,fontWeight:600,color:"var(--text)",marginBottom:16}}>Upload Flyers or Paste URL</div>
+                <div style={{display:"flex",background:"var(--bg)",borderRadius:12,padding:3,gap:3,marginBottom:16}}>
                   {(["image","url"] as const).map(m=>(
-                    <button key={m} onClick={()=>setUploadMode(m)} style={{flex:1,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:uploadMode===m?"#fff":"transparent",color:uploadMode===m?"#1C1C1E":"#AEAEB2",boxShadow:uploadMode===m?"0 1px 3px rgba(0,0,0,0.08)":"none"}}>
+                    <button key={m} onClick={()=>setUploadMode(m)} style={{flex:1,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:uploadMode===m?"var(--surf)":"transparent",color:uploadMode===m?"var(--text)":"var(--text3)",boxShadow:uploadMode===m?"0 1px 3px rgba(0,0,0,0.08)":"none"}}>
                       {m==="image"?"📷 Upload Flyers":"🔗 Paste URL"}
                     </button>
                   ))}
@@ -494,16 +493,16 @@ export default function PostDealPage() {
                   <>
                     <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple onChange={e=>handleFiles(e.target.files)} style={{display:"none"}}/>
                     <div onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();handleFiles(e.dataTransfer.files);}}
-                      style={{border:`2px dashed ${files.length>0?"#FF9F0A":"#E5E5EA"}`,borderRadius:14,padding:"24px 20px",textAlign:"center",cursor:"pointer",marginBottom:12,background:"#F9F9F9"}}>
+                      style={{border:`2px dashed ${files.length>0?"#FF9F0A":"var(--border)"}`,borderRadius:14,padding:"24px 20px",textAlign:"center",cursor:"pointer",marginBottom:12,background:"var(--bg3)"}}>
                       <div style={{fontSize:32,marginBottom:8}}>📷</div>
-                      <div style={{fontSize:14,fontWeight:600,color:"#1C1C1E",marginBottom:4}}>{files.length>0?`${files.length} file${files.length>1?"s":""} selected — tap to add more`:"Drop flyers here or tap to upload"}</div>
-                      <div style={{fontSize:12,color:"#AEAEB2"}}>JPG · PNG · PDF · Multiple files supported</div>
+                      <div style={{fontSize:14,fontWeight:600,color:"var(--text)",marginBottom:4}}>{files.length>0?`${files.length} file${files.length>1?"s":""} selected — tap to add more`:"Drop flyers here or tap to upload"}</div>
+                      <div style={{fontSize:12,color:"var(--text3)"}}>JPG · PNG · PDF · Multiple files supported</div>
                     </div>
                     {files.length>0&&(
                       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:8,marginBottom:16}}>
                         {files.map((f,i)=>(
-                          <div key={i} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid #E5E5EA",aspectRatio:"1",background:"#F9F9F9",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                            {previews[i]!=="pdf"?<img src={previews[i]} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{textAlign:"center"}}><div style={{fontSize:22}}>📄</div><div style={{fontSize:9,color:"#AEAEB2",marginTop:2}}>{f.name.slice(0,12)}</div></div>}
+                          <div key={i} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid var(--border)",aspectRatio:"1",background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            {previews[i]!=="pdf"?<img src={previews[i]} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{textAlign:"center"}}><div style={{fontSize:22}}>📄</div><div style={{fontSize:9,color:"var(--text3)",marginTop:2}}>{f.name.slice(0,12)}</div></div>}
                             <button onClick={e=>{e.stopPropagation();removeFile(i);}} style={{position:"absolute",top:3,right:3,width:18,height:18,borderRadius:"50%",background:"rgba(255,59,48,0.9)",border:"none",color:"#fff",fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>✕</button>
                           </div>
                         ))}
@@ -512,11 +511,11 @@ export default function PostDealPage() {
                   </>
                 )}
                 {uploadMode==="url"&&(
-                  <input style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:12,padding:"13px 16px",fontSize:14,color:"#1C1C1E",outline:"none",marginBottom:16}} value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://store.com/weekly-deals"/>
+                  <input style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:12,padding:"13px 16px",fontSize:16,color:"var(--text)",outline:"none",marginBottom:16}} value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://store.com/weekly-deals"/>
                 )}
                 {extracting&&<div style={{background:"rgba(255,159,10,0.08)",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:13,color:"#FF9F0A",fontWeight:500,textAlign:"center"}}>{extractProgress}</div>}
                 <button onClick={extract} disabled={extracting||(uploadMode==="image"&&files.length===0)||(uploadMode==="url"&&!url.trim())}
-                  style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:extracting?0.7:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
+                  style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:14,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:extracting?0.7:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
                   {extracting?`🤖 ${extractProgress}`:`🤖 Extract from ${files.length>0?`${files.length} file${files.length>1?"s":""}`:"Flyer"}`}
                 </button>
               </div>
@@ -537,77 +536,77 @@ export default function PostDealPage() {
                   </div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                     <div>
-                      <span style={{fontSize:15,fontWeight:600,color:"#1C1C1E"}}>{items.length} items</span>
-                      <span style={{fontSize:12,color:"#AEAEB2",marginLeft:8}}>Avg confidence: {avgConfidence}%</span>
+                      <span style={{fontSize:15,fontWeight:600,color:"var(--text)"}}>{items.length} items</span>
+                      <span style={{fontSize:12,color:"var(--text3)",marginLeft:8}}>Avg confidence: {avgConfidence}%</span>
                     </div>
                     <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                      {previews.length>0&&<button onClick={()=>setShowFlyer(!showFlyer)} style={{background:"#fff",border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,color:"#6D6D72",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                      {previews.length>0&&<button onClick={()=>setShowFlyer(!showFlyer)} style={{background:"var(--surf)",border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,color:"var(--text2)",cursor:"pointer",boxShadow:"var(--shadow)"}}>
                         {showFlyer?"Hide Flyer":"Show Flyer"}
                       </button>}
-                      <button onClick={()=>setStep("upload")} style={{background:"#fff",border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,color:"#6D6D72",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>← Re-upload</button>
+                      <button onClick={()=>setStep("upload")} style={{background:"var(--surf)",border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,color:"var(--text2)",cursor:"pointer",boxShadow:"var(--shadow)"}}>← Re-upload</button>
                       <button onClick={addItem} style={{background:"rgba(48,209,88,0.1)",border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,color:"#30D158",cursor:"pointer"}}>+ Add</button>
                     </div>
                   </div>
                   <div style={{display:"flex",flexDirection:"column" as const,gap:6,marginBottom:16}}>
                     {items.map(item=>(
-                      <div key={item.id} style={{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)",border:item.confidence<60?"1px solid rgba(255,59,48,0.2)":item.price<=0?"1px solid rgba(255,59,48,0.3)":"1px solid transparent"}}>
+                      <div key={item.id} style={{background:"var(--surf)",borderRadius:14,overflow:"hidden",boxShadow:"var(--shadow)",border:item.confidence<60?"1px solid rgba(255,59,48,0.2)":item.price<=0?"1px solid rgba(255,59,48,0.3)":"1px solid transparent"}}>
                         {editingId!==item.id?(
                           <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px"}}>
                             <div style={{flex:1,minWidth:0}}>
                               <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" as const}}>
-                                <span style={{fontSize:14,fontWeight:600,color:item.name?"#1C1C1E":"#FF3B30"}}>{item.name||"⚠️ Missing name"}</span>
+                                <span style={{fontSize:14,fontWeight:600,color:item.name?"var(--text)":"#FF3B30"}}>{item.name||"⚠️ Missing name"}</span>
                                 <ConfidenceBadge score={item.confidence}/>
                                 {item.price<=0&&<span style={{fontSize:9,fontWeight:700,background:"rgba(255,59,48,0.1)",color:"#FF3B30",borderRadius:20,padding:"2px 7px"}}>⚠️ No price</span>}
                                 {item.price>50&&<span style={{fontSize:9,fontWeight:700,background:"rgba(255,159,10,0.1)",color:"#FF9F0A",borderRadius:20,padding:"2px 7px"}}>💡 High price</span>}
                               </div>
-                              <div style={{fontSize:12,color:"#6D6D72",marginTop:2}}>{item.category} · {item.unit}</div>
+                              <div style={{fontSize:12,color:"var(--text2)",marginTop:2}}>{item.category} · {item.unit}</div>
                             </div>
                             <div style={{textAlign:"right",flexShrink:0}}>
                               <div style={{fontSize:16,fontWeight:700,color:item.price>0?"#FF9F0A":"#FF3B30"}}>{item.price>0?`$${item.price.toFixed(2)}`:"$0.00"}</div>
-                              {item.regular_price&&<div style={{fontSize:10,color:"#AEAEB2",textDecoration:"line-through"}}>${item.regular_price.toFixed(2)}</div>}
+                              {item.regular_price&&<div style={{fontSize:10,color:"var(--text3)",textDecoration:"line-through"}}>${item.regular_price.toFixed(2)}</div>}
                             </div>
-                            <button onClick={()=>setEditingId(item.id)} style={{background:"#F2F2F7",border:"none",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#1C1C1E",cursor:"pointer",flexShrink:0}}>✏️</button>
+                            <button onClick={()=>setEditingId(item.id)} style={{background:"var(--bg)",border:"none",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"var(--text)",cursor:"pointer",flexShrink:0}}>✏️</button>
                             <button onClick={()=>deleteItem(item.id)} style={{background:"rgba(255,59,48,0.1)",border:"none",borderRadius:8,padding:"6px 8px",fontSize:12,color:"#FF3B30",cursor:"pointer",flexShrink:0}}>✕</button>
                           </div>
                         ):(
                           <div style={{padding:16}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                <span style={{fontSize:13,fontWeight:600,color:"#1C1C1E"}}>Edit Item</span>
+                                <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Edit Item</span>
                                 <ConfidenceBadge score={item.confidence}/>
                               </div>
                               <button onClick={()=>setEditingId(null)} style={{background:"#FF9F0A",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,color:"#fff",cursor:"pointer"}}>Done ✓</button>
                             </div>
                             <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
                               <div>
-                                <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:4}}>ITEM NAME {!item.name&&<span style={{color:"#FF3B30"}}>*required</span>}</div>
-                                <input style={{width:"100%",background:!item.name?"rgba(255,59,48,0.05)":"#F2F2F7",border:!item.name?"1px solid rgba(255,59,48,0.3)":"none",borderRadius:10,padding:"10px 12px",fontSize:14,color:"#1C1C1E",outline:"none"}} value={item.name} onChange={e=>updateItem(item.id,"name",e.target.value)} placeholder="e.g. Toor Dal 4lb *"/>
+                                <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:4}}>ITEM NAME {!item.name&&<span style={{color:"#FF3B30"}}>*required</span>}</div>
+                                <input style={{width:"100%",background:!item.name?"rgba(255,59,48,0.05)":"var(--bg)",border:!item.name?"1px solid rgba(255,59,48,0.3)":"none",borderRadius:10,padding:"10px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={item.name} onChange={e=>updateItem(item.id,"name",e.target.value)} placeholder="e.g. Toor Dal 4lb *"/>
                               </div>
                               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                                 <div>
-                                  <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:4}}>PRICE ($) {item.price<=0&&<span style={{color:"#FF3B30"}}>*required</span>}</div>
-                                  <input type="number" step="0.01" style={{width:"100%",background:item.price<=0?"rgba(255,59,48,0.05)":"#F2F2F7",border:item.price<=0?"1px solid rgba(255,59,48,0.3)":"none",borderRadius:10,padding:"10px 12px",fontSize:14,color:"#1C1C1E",outline:"none"}} value={item.price||""} onChange={e=>updateItem(item.id,"price",parseFloat(e.target.value)||0)} placeholder="4.99"/>
+                                  <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:4}}>PRICE ($) {item.price<=0&&<span style={{color:"#FF3B30"}}>*required</span>}</div>
+                                  <input type="number" step="0.01" style={{width:"100%",background:item.price<=0?"rgba(255,59,48,0.05)":"var(--bg)",border:item.price<=0?"1px solid rgba(255,59,48,0.3)":"none",borderRadius:10,padding:"10px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={item.price||""} onChange={e=>updateItem(item.id,"price",parseFloat(e.target.value)||0)} placeholder="4.99"/>
                                 </div>
                                 <div>
-                                  <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:4}}>WAS ($)</div>
-                                  <input type="number" step="0.01" style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px 12px",fontSize:14,color:"#1C1C1E",outline:"none"}} value={item.regular_price||""} onChange={e=>updateItem(item.id,"regular_price",parseFloat(e.target.value)||null)} placeholder="6.99"/>
+                                  <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:4}}>WAS ($)</div>
+                                  <input type="number" step="0.01" style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"10px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={item.regular_price||""} onChange={e=>updateItem(item.id,"regular_price",parseFloat(e.target.value)||null)} placeholder="6.99"/>
                                 </div>
                                 <div>
-                                  <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:4}}>UNIT</div>
-                                  <select style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px 12px",fontSize:14,color:"#1C1C1E",outline:"none",cursor:"pointer"}} value={item.unit} onChange={e=>updateItem(item.id,"unit",e.target.value)}>
+                                  <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:4}}>UNIT</div>
+                                  <select style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"10px 12px",fontSize:16,color:"var(--text)",outline:"none",cursor:"pointer"}} value={item.unit} onChange={e=>updateItem(item.id,"unit",e.target.value)}>
                                     {UNITS.map(u=><option key={u} value={u}>{u}</option>)}
                                   </select>
                                 </div>
                               </div>
                               <div>
-                                <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:4}}>CATEGORY</div>
-                                <select style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px 12px",fontSize:14,color:"#1C1C1E",outline:"none",cursor:"pointer"}} value={item.category} onChange={e=>updateItem(item.id,"category",e.target.value)}>
+                                <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:4}}>CATEGORY</div>
+                                <select style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"10px 12px",fontSize:16,color:"var(--text)",outline:"none",cursor:"pointer"}} value={item.category} onChange={e=>updateItem(item.id,"category",e.target.value)}>
                                   {CATS.map(c=><option key={c} value={c}>{c}</option>)}
                                 </select>
                               </div>
                               <div>
-                                <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:4}}>NOTES (optional)</div>
-                                <input style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px 12px",fontSize:14,color:"#1C1C1E",outline:"none"}} value={item.notes} onChange={e=>updateItem(item.id,"notes",e.target.value)} placeholder="Any extra info..."/>
+                                <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:4}}>NOTES (optional)</div>
+                                <input style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"10px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={item.notes} onChange={e=>updateItem(item.id,"notes",e.target.value)} placeholder="Any extra info..."/>
                               </div>
                             </div>
                           </div>
@@ -616,37 +615,37 @@ export default function PostDealPage() {
                     ))}
                   </div>
                   <button onClick={()=>setStep("store")} disabled={items.length===0||noNameCount>0||zeroPriceCount>0}
-                    style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:(noNameCount>0||zeroPriceCount>0)?0.5:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
+                    style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:14,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:(noNameCount>0||zeroPriceCount>0)?0.5:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
                     {noNameCount>0?"Fix missing names first":zeroPriceCount>0?"Fix $0 prices first":"Continue → Select Store"}
                   </button>
                 </div>
 
                 {/* RIGHT — Flyer preview */}
                 {showFlyer&&previews.length>0&&(
-                  <div style={{position:"sticky",top:80,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
-                    <div style={{padding:"12px 16px",borderBottom:"0.5px solid #F2F2F7",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontSize:13,fontWeight:600,color:"#1C1C1E"}}>📄 Flyer Reference</span>
+                  <div style={{position:"sticky",top:80,background:"var(--surf)",borderRadius:16,overflow:"hidden",boxShadow:"var(--shadow-md)"}}>
+                    <div style={{padding:"12px 16px",borderBottom:"0.5px solid var(--border2)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>📄 Flyer Reference</span>
                       <div style={{display:"flex",gap:4}}>
                         {previews.map((_,i)=>(
-                          <button key={i} onClick={()=>setActivePreview(i)} style={{width:24,height:24,borderRadius:6,border:"none",background:activePreview===i?"#FF9F0A":"#F2F2F7",color:activePreview===i?"#fff":"#6D6D72",fontSize:11,fontWeight:700,cursor:"pointer"}}>{i+1}</button>
+                          <button key={i} onClick={()=>setActivePreview(i)} style={{width:24,height:24,borderRadius:6,border:"none",background:activePreview===i?"#FF9F0A":"var(--bg)",color:activePreview===i?"#fff":"var(--text2)",fontSize:11,fontWeight:700,cursor:"pointer"}}>{i+1}</button>
                         ))}
                       </div>
                     </div>
                     <div style={{padding:12}}>
                       <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,marginBottom:8}}>
-                        <button onClick={()=>setZoom(z=>Math.max(0.5,z-0.25))} style={{background:"#F2F2F7",border:"none",borderRadius:8,padding:"5px 14px",fontSize:16,cursor:"pointer",fontWeight:700,color:"#1C1C1E"}}>−</button>
-                        <span style={{fontSize:12,color:"#6D6D72",fontWeight:600}}>{Math.round(zoom*100)}%</span>
-                        <button onClick={()=>setZoom(z=>Math.min(3,z+0.25))} style={{background:"#F2F2F7",border:"none",borderRadius:8,padding:"5px 14px",fontSize:16,cursor:"pointer",fontWeight:700,color:"#1C1C1E"}}>+</button>
-                        <button onClick={()=>setZoom(1)} style={{background:"#F2F2F7",border:"none",borderRadius:8,padding:"4px 10px",fontSize:11,cursor:"pointer",color:"#6D6D72",fontWeight:600}}>Reset</button>
+                        <button onClick={()=>setZoom(z=>Math.max(0.5,z-0.25))} style={{background:"var(--bg)",border:"none",borderRadius:8,padding:"5px 14px",fontSize:16,cursor:"pointer",fontWeight:700,color:"var(--text)"}}>−</button>
+                        <span style={{fontSize:12,color:"var(--text2)",fontWeight:600}}>{Math.round(zoom*100)}%</span>
+                        <button onClick={()=>setZoom(z=>Math.min(3,z+0.25))} style={{background:"var(--bg)",border:"none",borderRadius:8,padding:"5px 14px",fontSize:16,cursor:"pointer",fontWeight:700,color:"var(--text)"}}>+</button>
+                        <button onClick={()=>setZoom(1)} style={{background:"var(--bg)",border:"none",borderRadius:8,padding:"4px 10px",fontSize:11,cursor:"pointer",color:"var(--text2)",fontWeight:600}}>Reset</button>
                       </div>
                       <div style={{overflow:"auto",maxHeight:560,borderRadius:10}}>
                         {previews[activePreview]==="pdf"
-                          ?<div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:44,marginBottom:8}}>📄</div><div style={{fontSize:13,color:"#AEAEB2"}}>{files[activePreview]?.name}</div></div>
+                          ?<div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:44,marginBottom:8}}>📄</div><div style={{fontSize:13,color:"var(--text3)"}}>{files[activePreview]?.name}</div></div>
                           :<img src={previews[activePreview]} alt="Flyer" style={{width:`${zoom*100}%`,borderRadius:10,objectFit:"contain",transition:"width 0.2s"}}/>
                         }
                       </div>
                     </div>
-                    <div style={{padding:"8px 16px",background:"#F9F9F9",fontSize:11,color:"#AEAEB2",textAlign:"center"}}>
+                    <div style={{padding:"8px 16px",background:"var(--bg3)",fontSize:11,color:"var(--text3)",textAlign:"center"}}>
                       Tap items to edit while referencing the flyer
                     </div>
                   </div>
@@ -656,8 +655,8 @@ export default function PostDealPage() {
 
             {/* ── STEP 3: STORE ── */}
             {step==="store"&&(
-              <div style={{background:"#fff",borderRadius:16,padding:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
-                <div style={{fontSize:15,fontWeight:600,color:"#1C1C1E",marginBottom:16}}>Store & Location</div>
+              <div style={{background:"var(--surf)",borderRadius:16,padding:20,boxShadow:"var(--shadow)"}}>
+                <div style={{fontSize:15,fontWeight:600,color:"var(--text)",marginBottom:16}}>Store & Location</div>
                 {extractedStoreName&&(
                   <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:"rgba(48,209,88,0.06)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:10,marginBottom:14}}>
                     <span style={{fontSize:14}}>🤖</span>
@@ -668,12 +667,12 @@ export default function PostDealPage() {
                   </div>
                 )}
                 {/* Store dropdown */}
-                <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:6}}>SELECT STORE</div>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6}}>SELECT STORE</div>
                 <div style={{display:"flex",gap:6,marginBottom:showAddBrand?0:14}}>
                   <select
                     value={selectedBrand?.id||""}
                     onChange={e=>{const b=brands.find(b=>b.id===e.target.value)||null;setSelectedBrand(b);setSelectedLocs([]);setPendingExtractedLocs([]);if(b)fetchLocations(b.id);else setLocations([]);}}
-                    style={{flex:1,background:"#F2F2F7",border:"none",borderRadius:10,padding:"11px 12px",fontSize:14,color:selectedBrand?"#1C1C1E":"#AEAEB2",outline:"none",cursor:"pointer"}}>
+                    style={{flex:1,background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 12px",fontSize:16,color:selectedBrand?"var(--text)":"var(--text3)",outline:"none",cursor:"pointer"}}>
                     <option value="">— Select store —</option>
                     {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
@@ -684,38 +683,38 @@ export default function PostDealPage() {
                 </div>
                 {showAddBrand&&(
                   <div style={{padding:"14px",background:"rgba(255,159,10,0.05)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,marginBottom:14,marginTop:8}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>NEW STORE</div>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:8}}>NEW STORE</div>
                     <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
                       <input value={newBrandName} onChange={e=>setNewBrandName(e.target.value)} autoFocus
                         placeholder="Store name *"
-                        style={{background:"#fff",border:"1px solid rgba(255,159,10,0.4)",borderRadius:9,padding:"9px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                        style={{background:"var(--surf)",border:"1px solid rgba(255,159,10,0.4)",borderRadius:9,padding:"9px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
                       <input value={newBrandWebsite} onChange={e=>setNewBrandWebsite(e.target.value)}
                         placeholder="Website (optional)"
-                        style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"9px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                        style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"9px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
                       <input value={newBrandPhone} onChange={e=>setNewBrandPhone(e.target.value)}
                         placeholder="Phone (optional)"
-                        style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"9px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                        style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"9px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
                       <div style={{display:"flex",gap:6}}>
                         <button onClick={createBrand} disabled={addingBrand||!newBrandName.trim()}
                           style={{flex:2,padding:"9px",background:"#FF9F0A",border:"none",borderRadius:9,fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",opacity:!newBrandName.trim()?0.5:1}}>
                           {addingBrand?"Adding...":"Add Store"}
                         </button>
                         <button onClick={()=>setShowAddBrand(false)}
-                          style={{flex:1,padding:"9px",background:"#F2F2F7",border:"none",borderRadius:9,fontSize:13,color:"#6D6D72",cursor:"pointer"}}>Cancel</button>
+                          style={{flex:1,padding:"9px",background:"var(--bg)",border:"none",borderRadius:9,fontSize:13,color:"var(--text2)",cursor:"pointer"}}>Cancel</button>
                       </div>
                     </div>
                   </div>
                 )}
                 {selectedBrand&&(
                   <>
-                    <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:6}}>VALID AT</div>
-                    <div style={{display:"flex",background:"#F2F2F7",borderRadius:12,padding:3,gap:3,marginBottom:12}}>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6}}>VALID AT</div>
+                    <div style={{display:"flex",background:"var(--bg)",borderRadius:12,padding:3,gap:3,marginBottom:12}}>
                       {([["all","🌐 All Branches"],["specific","📍 Specific Branches"]] as const).map(([m,l])=>(
-                        <button key={m} onClick={()=>setLocationMode(m)} style={{flex:1,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:locationMode===m?"#fff":"transparent",color:locationMode===m?"#1C1C1E":"#AEAEB2",boxShadow:locationMode===m?"0 1px 3px rgba(0,0,0,0.08)":"none"}}>{l}</button>
+                        <button key={m} onClick={()=>setLocationMode(m)} style={{flex:1,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:locationMode===m?"var(--surf)":"transparent",color:locationMode===m?"var(--text)":"var(--text3)",boxShadow:locationMode===m?"0 1px 3px rgba(0,0,0,0.08)":"none"}}>{l}</button>
                       ))}
                     </div>
 
-                    {/* From-flyer pending locations (shown only when brand not yet created) */}
+                    {/* From-flyer pending locations */}
                     {locationMode==="specific"&&pendingExtractedLocs.length>0&&!selectedBrand&&(
                       <div style={{marginBottom:10,padding:"10px 12px",background:"rgba(255,159,10,0.05)",border:"1px solid rgba(255,159,10,0.25)",borderRadius:10}}>
                         <div style={{fontSize:11,fontWeight:600,color:"#FF9F0A",marginBottom:6}}>
@@ -723,7 +722,7 @@ export default function PostDealPage() {
                         </div>
                         <div style={{display:"flex",flexDirection:"column" as const,gap:4}}>
                           {pendingExtractedLocs.map((loc,idx)=>(
-                            <div key={idx} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#6D6D72"}}>
+                            <div key={idx} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--text2)"}}>
                               <span style={{color:"#FF9F0A"}}>📍</span>
                               <span>{loc.city}{loc.state?`, ${loc.state}`:""}{loc.address?` — ${loc.address}`:""}{loc.zip?` ${loc.zip}`:""}</span>
                             </div>
@@ -738,7 +737,7 @@ export default function PostDealPage() {
                         <select
                           value=""
                           onChange={e=>{const id=e.target.value;if(id&&!selectedLocs.includes(id))setSelectedLocs(prev=>[...prev,id]);}}
-                          style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"11px 12px",fontSize:14,color:locations.filter(l=>!selectedLocs.includes(l.id)).length?"#1C1C1E":"#AEAEB2",outline:"none",cursor:"pointer",marginBottom:selectedLocs.length?8:0}}>
+                          style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 12px",fontSize:16,color:locations.filter(l=>!selectedLocs.includes(l.id)).length?"var(--text)":"var(--text3)",outline:"none",cursor:"pointer",marginBottom:selectedLocs.length?8:0}}>
                           <option value="">{locations.length===0?"No branches yet — add one below":"— Select a branch to add —"}</option>
                           {locations.filter(l=>!selectedLocs.includes(l.id)).map(l=>(
                             <option key={l.id} value={l.id}>{l.branch_name}{l.city?` · ${l.city}`:""}{ l.zip?` ${l.zip}`:""}</option>
@@ -764,22 +763,22 @@ export default function PostDealPage() {
                     )}
                     {locationMode==="specific"&&(showAddLoc?(
                       <div style={{padding:"14px",background:"rgba(255,159,10,0.05)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,marginBottom:12}}>
-                        <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>NEW LOCATION</div>
+                        <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:8}}>NEW LOCATION</div>
                         <div style={{display:"flex",flexDirection:"column" as const,gap:7}}>
                           <input value={newLocBranch} onChange={e=>setNewLocBranch(e.target.value)} placeholder="Branch name (optional)" autoFocus
-                            style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                            style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
                           <input value={newLocAddress} onChange={e=>setNewLocAddress(e.target.value)} placeholder="Street address"
-                            style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                            style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
                           <div style={{display:"flex",gap:6}}>
                             <input value={newLocCity} onChange={e=>setNewLocCity(e.target.value)} placeholder="City *"
-                              style={{flex:2,background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                              style={{flex:2,background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
                             <input value={newLocState} onChange={e=>setNewLocState(e.target.value.toUpperCase().slice(0,2))} placeholder="ST" maxLength={2}
-                              style={{width:48,background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 8px",fontSize:13,color:"#1C1C1E",outline:"none",textAlign:"center" as const}}/>
+                              style={{width:48,background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 8px",fontSize:16,color:"var(--text)",outline:"none",textAlign:"center" as const}}/>
                             <input value={newLocZip} onChange={e=>setNewLocZip(e.target.value.replace(/\D/g,"").slice(0,5))} placeholder="ZIP" maxLength={5}
-                              style={{width:72,background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 10px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                              style={{width:72,background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 10px",fontSize:16,color:"var(--text)",outline:"none"}}/>
                           </div>
                           <input value={newLocPhone} onChange={e=>setNewLocPhone(e.target.value)} placeholder="Phone (optional)"
-                            style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"8px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
+                            style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
                           <button onClick={lookupLocation} disabled={lookingUpLoc}
                             style={{width:"100%",padding:"9px",background:"rgba(10,132,255,0.08)",border:"1px solid rgba(10,132,255,0.2)",borderRadius:9,fontSize:12,fontWeight:600,color:"#0A84FF",cursor:"pointer"}}>
                             {lookingUpLoc?"🔍 Looking up...":"📍 Auto-fill from address / zip"}
@@ -788,7 +787,7 @@ export default function PostDealPage() {
                             <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"rgba(48,209,88,0.06)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:9}}>
                               <span>🗺️</span>
                               <a href={newLocMapLink} target="_blank" rel="noreferrer" style={{flex:1,fontSize:12,color:"#30D158",fontWeight:600,textDecoration:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>View on Google Maps ↗</a>
-                              {newLocLat&&<span style={{fontSize:10,color:"#AEAEB2",flexShrink:0}}>{newLocLat.toFixed(4)}, {newLocLng?.toFixed(4)}</span>}
+                              {newLocLat&&<span style={{fontSize:10,color:"var(--text3)",flexShrink:0}}>{newLocLat.toFixed(4)}, {newLocLng?.toFixed(4)}</span>}
                             </div>
                           )}
                           <div style={{display:"flex",gap:6}}>
@@ -797,7 +796,7 @@ export default function PostDealPage() {
                               {addingLoc?"Saving...":"Save Location"}
                             </button>
                             <button onClick={()=>setShowAddLoc(false)}
-                              style={{flex:1,padding:"9px",background:"#F2F2F7",border:"none",borderRadius:9,fontSize:13,color:"#6D6D72",cursor:"pointer"}}>Cancel</button>
+                              style={{flex:1,padding:"9px",background:"var(--bg)",border:"none",borderRadius:9,fontSize:13,color:"var(--text2)",cursor:"pointer"}}>Cancel</button>
                           </div>
                         </div>
                       </div>
@@ -811,16 +810,16 @@ export default function PostDealPage() {
                 )}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
                   <div>
-                    <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:6}}>SALE STARTS</div>
-                    <input type="date" style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"11px 12px",fontSize:14,color:"#1C1C1E",outline:"none"}} value={saleStart} onChange={e=>setSaleStart(e.target.value)}/>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6}}>SALE STARTS</div>
+                    <input type="date" style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={saleStart} onChange={e=>setSaleStart(e.target.value)}/>
                   </div>
                   <div>
-                    <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:6}}>SALE ENDS</div>
-                    <input type="date" style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"11px 12px",fontSize:14,color:"#1C1C1E",outline:"none"}} value={saleEnd} onChange={e=>setSaleEnd(e.target.value)}/>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6}}>SALE ENDS</div>
+                    <input type="date" style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={saleEnd} onChange={e=>setSaleEnd(e.target.value)}/>
                   </div>
                 </div>
                 <button onClick={()=>setStep("confirm")} disabled={!selectedBrand||(locationMode==="specific"&&selectedLocs.length===0)}
-                  style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:!selectedBrand?0.5:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
+                  style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:14,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:!selectedBrand?0.5:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
                   Continue → Review & Publish
                 </button>
               </div>
@@ -829,8 +828,8 @@ export default function PostDealPage() {
             {/* ── STEP 4: CONFIRM ── */}
             {step==="confirm"&&(
               <div>
-                <div style={{background:"#fff",borderRadius:16,padding:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)",marginBottom:12}}>
-                  <div style={{fontSize:15,fontWeight:600,color:"#1C1C1E",marginBottom:16}}>Confirm Deal</div>
+                <div style={{background:"var(--surf)",borderRadius:16,padding:20,boxShadow:"var(--shadow)",marginBottom:12}}>
+                  <div style={{fontSize:15,fontWeight:600,color:"var(--text)",marginBottom:16}}>Confirm Deal</div>
                   <div style={{display:"flex",flexDirection:"column" as const,gap:0}}>
                     {[
                       {l:"Store",v:selectedBrand?.name},
@@ -840,26 +839,26 @@ export default function PostDealPage() {
                       {l:"Avg Confidence",v:`${avgConfidence}%`},
                       {l:"Source",v:uploadMode==="image"?`📄 Flyer (${files.length} file${files.length>1?"s":""})`:"🔗 URL"},
                     ].map((r,i,arr)=>(
-                      <div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:i<arr.length-1?"0.5px solid #F2F2F7":"none"}}>
-                        <span style={{fontSize:13,color:"#6D6D72"}}>{r.l}</span>
-                        <span style={{fontSize:13,fontWeight:600,color:"#1C1C1E"}}>{r.v}</span>
+                      <div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:i<arr.length-1?"0.5px solid var(--border2)":"none"}}>
+                        <span style={{fontSize:13,color:"var(--text2)"}}>{r.l}</span>
+                        <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{r.v}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div style={{background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.06)",marginBottom:16}}>
-                  <div style={{padding:"12px 16px",borderBottom:"0.5px solid #F2F2F7",fontSize:13,fontWeight:600,color:"#1C1C1E"}}>Items ({items.length})</div>
+                <div style={{background:"var(--surf)",borderRadius:16,overflow:"hidden",boxShadow:"var(--shadow)",marginBottom:16}}>
+                  <div style={{padding:"12px 16px",borderBottom:"0.5px solid var(--border2)",fontSize:13,fontWeight:600,color:"var(--text)"}}>Items ({items.length})</div>
                   <div style={{maxHeight:300,overflowY:"auto"}}>
                     {items.map((item,i)=>(
-                      <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:i<items.length-1?"0.5px solid #F2F2F7":"none"}}>
+                      <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:i<items.length-1?"0.5px solid var(--border2)":"none"}}>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:13,fontWeight:600,color:"#1C1C1E",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
-                          <div style={{fontSize:11,color:"#AEAEB2"}}>{item.category} · {item.unit}</div>
+                          <div style={{fontSize:13,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.name}</div>
+                          <div style={{fontSize:11,color:"var(--text3)"}}>{item.category} · {item.unit}</div>
                         </div>
                         <ConfidenceBadge score={item.confidence}/>
                         <div style={{textAlign:"right" as const,flexShrink:0}}>
                           <div style={{fontSize:14,fontWeight:700,color:"#FF9F0A"}}>${item.price.toFixed(2)}</div>
-                          {item.regular_price&&<div style={{fontSize:10,color:"#AEAEB2",textDecoration:"line-through"}}>${item.regular_price.toFixed(2)}</div>}
+                          {item.regular_price&&<div style={{fontSize:10,color:"var(--text3)",textDecoration:"line-through"}}>${item.regular_price.toFixed(2)}</div>}
                         </div>
                       </div>
                     ))}
@@ -882,7 +881,7 @@ export default function PostDealPage() {
                         <div style={{fontSize:14,fontWeight:700,color:"#FF9F0A",marginBottom:3}}>
                           {duplicateWarning.skippedItems.length} item{duplicateWarning.skippedItems.length>1?"s":""} already posted for {selectedBrand?.name} on {saleStart}
                         </div>
-                        <div style={{fontSize:12,color:"#6D6D72"}}>
+                        <div style={{fontSize:12,color:"var(--text2)"}}>
                           {duplicateWarning.toPublish.length>0
                             ?`Skip the duplicates and publish the remaining ${duplicateWarning.toPublish.length} new item${duplicateWarning.toPublish.length>1?"s":""}?`
                             :"All items already exist — nothing new to publish."}
@@ -892,14 +891,14 @@ export default function PostDealPage() {
                     <div style={{display:"flex",flexDirection:"column" as const,gap:4,marginBottom:12,maxHeight:120,overflowY:"auto"}}>
                       {duplicateWarning.skippedItems.map((item,i)=>(
                         <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"rgba(255,159,10,0.08)",borderRadius:8}}>
-                          <span style={{fontSize:12,color:"#1C1C1E",fontWeight:500}}>{item.name}</span>
+                          <span style={{fontSize:12,color:"var(--text)",fontWeight:500}}>{item.name}</span>
                           <span style={{fontSize:12,color:"#FF9F0A",fontWeight:700}}>${item.price.toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
                     <div style={{display:"flex",gap:8}}>
                       <button onClick={()=>setDuplicateWarning(null)}
-                        style={{flex:1,padding:"10px",background:"#F2F2F7",border:"none",borderRadius:10,fontSize:13,fontWeight:600,color:"#6D6D72",cursor:"pointer"}}>
+                        style={{flex:1,padding:"10px",background:"var(--bg)",border:"none",borderRadius:10,fontSize:13,fontWeight:600,color:"var(--text2)",cursor:"pointer"}}>
                         ← Cancel
                       </button>
                       {duplicateWarning.toPublish.length>0&&(
@@ -913,9 +912,9 @@ export default function PostDealPage() {
                 )}
 
                 {!duplicateWarning&&<div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>setStep("store")} style={{flex:1,padding:14,background:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:600,color:"#6D6D72",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>← Edit</button>
+                  <button onClick={()=>setStep("store")} style={{flex:1,padding:14,background:"var(--surf)",border:"none",borderRadius:12,fontSize:14,fontWeight:600,color:"var(--text2)",cursor:"pointer",boxShadow:"var(--shadow)"}}>← Edit</button>
                   <button onClick={publish} disabled={publishing}
-                    style={{flex:2,padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:publishing?0.7:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
+                    style={{flex:2,padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:14,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:publishing?0.7:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
                     {publishing?"Publishing...":"🚀 Publish Live"}
                   </button>
                 </div>}
@@ -925,6 +924,14 @@ export default function PostDealPage() {
           </div>
         </div>
       </div>
+      <style>{`
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        .fade-up{animation:fadeInUp 0.35s ease both}
+        @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+        .skel{background:linear-gradient(90deg,var(--bg) 25%,var(--bg3) 50%,var(--bg) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite}
+        @media(hover:none){button:hover{opacity:1!important;transform:none!important}}
+        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}.skel{animation:none!important}}
+      `}</style>
     </>
   );
 }

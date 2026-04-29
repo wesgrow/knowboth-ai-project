@@ -185,9 +185,9 @@ function DealsContent() {
   return (
     <div style={{ minHeight: "100vh", background: "#F2F2F7" }} className="page-body">
       <style>{`
-        /* Hide group-by controls on mobile to reduce toolbar clutter */
         @media (max-width: 640px) {
-          .group-by-controls { display: none !important; }
+          .group-by-controls { width: 100%; padding-top: 6px; }
+          .group-by-sep { display: none !important; }
           .table-hint { display: block; }
         }
         @media (min-width: 641px) {
@@ -225,7 +225,7 @@ function DealsContent() {
                 </button>
                 {/* Hidden on mobile via .group-by-controls CSS class */}
                 <div className="group-by-controls" style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <div style={{ width:1, height:18, background:"#E5E5EA", flexShrink:0 }}/>
+                  <div className="group-by-sep" style={{ width:1, height:18, background:"#E5E5EA", flexShrink:0 }}/>
                   <span style={{ fontSize:11, color:"#AEAEB2", fontWeight:600, flexShrink:0 }}>Group by</span>
                   {([["category","📂 Category"],["store","🏪 Store"],["price","💰 Price"]] as const).map(([v,l]) => (
                     <button key={v} onClick={() => setGroupBy(v)}

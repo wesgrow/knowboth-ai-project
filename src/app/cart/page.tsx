@@ -43,7 +43,7 @@ export default function CartPage() {
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
             <div>
-              <h1 style={{fontSize:22,fontWeight:700,color:"var(--text)",letterSpacing:-0.5}}>My Cart</h1>
+              <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>My Cart</h1>
               <p style={{fontSize:13,color:"var(--text2)",marginTop:3}}>{itemCount} items · {storeCount} store{storeCount!==1?"s":""}</p>
             </div>
             {cart.length>0&&(
@@ -178,6 +178,13 @@ export default function CartPage() {
           )}
         </div>
       </div>
+
+      <style>{`
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        .fade-up{animation:fadeInUp 0.35s ease both}
+        @media(hover:none){button:hover{opacity:1!important;transform:none!important}}
+        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}}
+      `}</style>
     </>
   );
 }

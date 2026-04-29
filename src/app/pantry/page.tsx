@@ -39,7 +39,7 @@ export default function StockPage() {
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div>
-              <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, color: "var(--text)" }}>Stock</h1>
+              <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 4, color: "var(--text)", letterSpacing: -0.8 }}>Stock</h1>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
                 {stockItems.length} items · {low} low stock
               </p>
@@ -158,6 +158,15 @@ export default function StockPage() {
       </div>
 
       {/* Restock Modal */}
+      <style>{`
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        .fade-up{animation:fadeInUp 0.35s ease both}
+        @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+        .skel{background:linear-gradient(90deg,var(--bg) 25%,var(--bg3) 50%,var(--bg) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite}
+        @media(hover:none){button:hover{opacity:1!important;transform:none!important}}
+        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}.skel{animation:none!important}}
+      `}</style>
+
       {restock && (
         <div onClick={e => e.target === e.currentTarget && setRestock(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center", backdropFilter: "blur(8px)" }}>
           <div style={{ background: "var(--surf)", border: "1px solid var(--border)", borderRadius: "20px 20px 0 0", padding: "24px 20px 36px", width: "100%", maxWidth: 480 }}>
