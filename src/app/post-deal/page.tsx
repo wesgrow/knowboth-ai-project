@@ -23,6 +23,7 @@ interface DealItem {
 
 interface Brand { id: string; name: string; slug: string; website?: string; phone?: string; }
 interface Location { id: string; branch_name: string; address?: string; city: string; state?: string; zip: string; phone?: string; lat?: number; lng?: number; map_link?: string; }
+interface ExtractedLoc { address?: string; city: string; state?: string; zip?: string; phone?: string; }
 
 function ConfidenceBadge({ score }: { score: number }) {
   const color = score >= 80 ? "#30D158" : score >= 60 ? "#FF9F0A" : "#FF3B30";
@@ -86,6 +87,8 @@ export default function PostDealPage() {
   const [newLocMapLink, setNewLocMapLink] = useState("");
   const [lookingUpLoc, setLookingUpLoc] = useState(false);
   const [addingLoc, setAddingLoc] = useState(false);
+  const [extractedStoreName, setExtractedStoreName] = useState<string>("");
+  const [pendingExtractedLocs, setPendingExtractedLocs] = useState<ExtractedLoc[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(()=>{ fetchBrands(); },[]);
@@ -95,9 +98,67 @@ export default function PostDealPage() {
     setBrands(data||[]);
   }
 
-  async function fetchLocations(brandId:string) {
+  async function fetchLocations(brandId:string): Promise<Location[]> {
     const{data}=await supabase.from("store_locations").select("id,branch_name,address,city,state,zip,phone,lat,lng,map_link").eq("brand_id",brandId).order("city");
-    setLocations(data||[]);
+    const locs = data||[];
+    setLocations(locs);
+    return locs;
+  }
+
+  function norm(s:string){ return s.toLowerCase().replace(/[^a-z0-9]/g,""); }
+
+  async function autoCreateLocations(brandId: string, brandName: string, locs: ExtractedLoc[]): Promise<string[]> {
+    const ids: string[] = [];
+    for (const loc of locs) {
+      const city = loc.city.trim();
+      if (!city) continue;
+      const payload: any = { brand_id: brandId, branch_name: `${brandName} - ${city}`, city };
+      if (loc.address?.trim()) payload.address = loc.address.trim();
+      if (loc.state?.trim()) payload.state = loc.state.trim();
+      if (loc.zip?.trim()) payload.zip = loc.zip.trim();
+      if (loc.phone?.trim()) payload.phone = loc.phone.trim();
+      const { data } = await supabase.from("store_locations").insert(payload).select("id").single();
+      if (data) ids.push(data.id);
+    }
+    return ids;
+  }
+
+  async function matchAndApplyLocations(brandId: string, brandName: string, extracted: ExtractedLoc[], dbLocs: Location[]) {
+    const matchedIds: string[] = [];
+    const toCreate: ExtractedLoc[] = [];
+    for (const el of extracted) {
+      const hit = dbLocs.find(dl =>
+        (el.zip && dl.zip && el.zip.replace(/\D/g,"") === dl.zip.replace(/\D/g,"")) ||
+        (el.city && dl.city && norm(el.city) === norm(dl.city))
+      );
+      if (hit) matchedIds.push(hit.id);
+      else toCreate.push(el);
+    }
+    if (toCreate.length > 0) {
+      const newIds = await autoCreateLocations(brandId, brandName, toCreate);
+      matchedIds.push(...newIds);
+      await fetchLocations(brandId);
+      toast.success(`${toCreate.length} branch${toCreate.length>1?"es":""} auto-added`);
+    }
+    if (matchedIds.length > 0) { setLocationMode("specific"); setSelectedLocs(matchedIds); }
+    setPendingExtractedLocs([]);
+  }
+
+  async function autoMatchStore(storeName: string, storedLocs: ExtractedLoc[]) {
+    if (!storeName.trim()) return;
+    const match = brands.find(b => {
+      const nb = norm(b.name), ns = norm(storeName);
+      return nb === ns || nb.includes(ns) || ns.includes(nb);
+    });
+    if (match) {
+      setSelectedBrand(match);
+      const dbLocs = await fetchLocations(match.id);
+      if (storedLocs.length > 0) await matchAndApplyLocations(match.id, match.name, storedLocs, dbLocs);
+    } else {
+      setNewBrandName(storeName);
+      setShowAddBrand(true);
+      if (storedLocs.length > 0) setPendingExtractedLocs(storedLocs);
+    }
   }
 
   function toSlug(name:string){ return name.toLowerCase().trim().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,""); }
@@ -137,9 +198,14 @@ export default function PostDealPage() {
       setAddingBrand(false); return;
     }
     await fetchBrands();
-    setSelectedBrand(data); fetchLocations(data.id);
+    setSelectedBrand(data);
     setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
     toast.success(`✦ ${name} added`);
+    if (pendingExtractedLocs.length > 0) {
+      await matchAndApplyLocations(data.id, data.name, pendingExtractedLocs, []);
+    } else {
+      await fetchLocations(data.id);
+    }
     setAddingBrand(false);
   }
 
@@ -206,10 +272,14 @@ export default function PostDealPage() {
         for(let i=0;i<files.length;i++) {
           setExtractProgress(`Extracting file ${i+1} of ${files.length}...`);
           const b64 = await toB64(files[i]);
-          const body = { store:selectedBrand?.name||"Unknown Store", b64, mime:files[i].type };
+          const body = { store:selectedBrand?.name||"", b64, mime:files[i].type };
           const res = await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
           const data = await res.json();
           if(data.error) { toast.error(`File ${i+1}: ${data.error}`); continue; }
+          if(i===0 && data.store_name) {
+            setExtractedStoreName(data.store_name);
+            await autoMatchStore(data.store_name, data.store_locations||[]);
+          }
           const extracted = (data.items||[]).map((item:any,idx:number)=>{
             const raw = {
               id:`file${i}-item${idx}-${Date.now()}`,
@@ -230,10 +300,14 @@ export default function PostDealPage() {
         }
       } else {
         setExtractProgress("Extracting from URL...");
-        const body = { store:selectedBrand?.name||"Unknown Store", url };
+        const body = { store:selectedBrand?.name||"", url };
         const res = await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
         const data = await res.json();
         if(data.error) throw new Error(data.error);
+        if(data.store_name) {
+          setExtractedStoreName(data.store_name);
+          await autoMatchStore(data.store_name, data.store_locations||[]);
+        }
         allItems.push(...(data.items||[]).map((item:any,idx:number)=>{
           const raw = {
             id:`url-item${idx}-${Date.now()}`,
@@ -285,78 +359,91 @@ export default function PostDealPage() {
     setEditingId(newItem.id);
   }
 
+  const normalizeStr=(s:string)=>s.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
+
+  function withPublishTimeout<T>(p: Promise<T>): Promise<T> {
+    return Promise.race([p, new Promise<never>((_,rej)=>setTimeout(()=>rej(new Error("Publish timed out — check your connection.")),30000))]);
+  }
+
+  async function doPublish(itemsToPublish: DealItem[]) {
+    if(!selectedBrand||itemsToPublish.length===0) throw new Error("Nothing to publish");
+    const{data:{session}}=await withPublishTimeout(supabaseAuth.auth.getSession());
+    if(!session?.user?.id) throw new Error("You must be signed in to post deals");
+
+    const locIds: (string|null)[] = locationMode==="specific"&&selectedLocs.length>0
+      ? selectedLocs
+      : [null];
+
+    const itemRows = itemsToPublish.map(i=>({
+      name:i.name.trim(),
+      normalized_name:normalizeStr(i.normalized_name||i.name),
+      price:i.price, regular_price:i.regular_price||null, unit:i.unit,
+      category:VALID_CATS.includes(i.category)?i.category:"Other",
+      notes:i.notes||null, source:uploadMode==="image"?"flyer":"manual",
+    }));
+
+    await Promise.all(locIds.map(async(locId)=>{
+      const dealPayload:any={
+        brand_id:selectedBrand!.id, posted_by:session.user.id, status:"approved",
+        applies_to_all_locations:locationMode==="all",
+        sale_start:saleStart, sale_end:saleEnd||null,
+      };
+      if(locId) dealPayload.location_id=locId;
+      const{data:deal,error:de}=await supabase.from("deals").insert(dealPayload).select("id").single();
+      if(de||!deal?.id) throw new Error(de?.message||"Failed to create deal");
+      const{error:ie}=await supabase.from("deal_items").insert(itemRows.map(r=>({...r,deal_id:deal.id})));
+      if(ie) throw new Error(ie.message);
+    }));
+
+    const branchMsg = locIds.length>1?` across ${locIds.length} branches`:"";
+    toast.success(`🚀 ${itemsToPublish.length} deal${itemsToPublish.length>1?"s":""} published${branchMsg}!`);
+    router.push("/deals");
+  }
+
   async function publish() {
     if(!selectedBrand){toast.error("Select a store");return;}
     if(items.length===0){toast.error("No items to publish");return;}
-    const noName = items.filter(i=>!i.name.trim());
+    const noName=items.filter(i=>!i.name.trim());
     if(noName.length>0){toast.error(`${noName.length} items missing name`);setEditingId(noName[0].id);setStep("review");return;}
-    const noPrice = items.filter(i=>i.price<=0);
+    const noPrice=items.filter(i=>i.price<=0);
     if(noPrice.length>0){toast.error(`${noPrice.length} items have $0 price`);setEditingId(noPrice[0].id);setStep("review");return;}
     setPublishing(true);
     try{
-      const normalizeStr=(s:string)=>s.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
-
-      const{data:{session}}=await supabaseAuth.auth.getSession();
-      if(!session?.user?.id){toast.error("You must be signed in to post deals");return;}
-
-      // Deduplicate against existing deal_items for same store + sale date
-      const{data:existingDeals}=await supabase.from("deals").select("id").eq("brand_id",selectedBrand.id).eq("sale_start",saleStart);
+      // Deduplicate: check existing deals for same brand + date + location
+      let query=supabase.from("deals").select("id").eq("brand_id",selectedBrand.id).eq("sale_start",saleStart);
+      if(locationMode==="specific"&&selectedLocs.length===1) query=(query as any).eq("location_id",selectedLocs[0]);
+      const{data:existingDeals}=await withPublishTimeout(query as any);
       let itemsToPublish=items;
       if(existingDeals&&existingDeals.length>0){
-        const dealIds=existingDeals.map(d=>d.id);
+        const dealIds=existingDeals.map((d:any)=>d.id);
         const{data:existingDealItems}=await supabase.from("deal_items").select("normalized_name,price").in("deal_id",dealIds);
         if(existingDealItems&&existingDealItems.length>0){
-          const dupSet=new Set(existingDealItems.map(i=>`${i.normalized_name}|${i.price}`));
+          const dupSet=new Set(existingDealItems.map((i:any)=>`${i.normalized_name}|${i.price}`));
           const fresh=items.filter(i=>!dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
           const dupes=items.filter(i=>dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
           if(dupes.length>0){
             setDuplicateWarning({skippedItems:dupes,toPublish:fresh});
-            setPublishing(false);
             return;
           }
           itemsToPublish=fresh;
         }
       }
-
-      setPublishing(false);
-      await publishResolved(itemsToPublish);
+      await withPublishTimeout(doPublish(itemsToPublish));
     }catch(e:any){
-      console.error("Publish error:", e);
-      toast.error(e.message||"Failed to publish. Check DevTools console for details.");
+      console.error("Publish error:",e);
+      toast.error(e.message||"Failed to publish.");
     }finally{
       setPublishing(false);
     }
   }
 
   async function publishResolved(itemsToPublish: DealItem[]) {
-    if(!selectedBrand||itemsToPublish.length===0) return;
     setDuplicateWarning(null);
     setPublishing(true);
     try{
-      const normalizeStr=(s:string)=>s.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
-      const{data:{session}}=await supabaseAuth.auth.getSession();
-      if(!session?.user?.id){toast.error("You must be signed in to post deals");return;}
-      const{data:deal,error:de}=await supabase.from("deals").insert({
-        brand_id:selectedBrand.id,
-        posted_by:session.user.id,
-        status:"approved",
-        applies_to_all_locations:locationMode==="all",
-        sale_start:saleStart,
-        sale_end:saleEnd||null,
-      }).select("id").single();
-      if(de||!deal?.id){console.error("deals insert error:", de);throw new Error(de?.message||"Failed to create deal");}
-      const{error:ie}=await supabase.from("deal_items").insert(itemsToPublish.map(i=>({
-        deal_id:deal.id,name:i.name.trim(),
-        normalized_name:normalizeStr(i.normalized_name||i.name),
-        price:i.price,regular_price:i.regular_price||null,unit:i.unit,
-        category:VALID_CATS.includes(i.category)?i.category:"Other",
-        notes:i.notes||null,source:uploadMode==="image"?"flyer":"manual",
-      })));
-      if(ie){console.error("deal_items insert error:", ie);throw new Error(ie.message);}
-      toast.success(`🚀 ${itemsToPublish.length} deal${itemsToPublish.length>1?"s":""} published!`);
-      router.push("/deals");
+      await withPublishTimeout(doPublish(itemsToPublish));
     }catch(e:any){
-      console.error("Publish error:", e);
+      console.error("Publish error:",e);
       toast.error(e.message||"Failed to publish.");
     }finally{
       setPublishing(false);
@@ -571,26 +658,39 @@ export default function PostDealPage() {
             {step==="store"&&(
               <div style={{background:"#fff",borderRadius:16,padding:20,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
                 <div style={{fontSize:15,fontWeight:600,color:"#1C1C1E",marginBottom:16}}>Store & Location</div>
-                <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>SELECT STORE</div>
-                <div style={{display:"flex",flexDirection:"column" as const,gap:6,marginBottom:10}}>
-                  {brands.map(b=>(
-                    <div key={b.id} onClick={()=>{setSelectedBrand(b);setSelectedLocs([]);fetchLocations(b.id);}}
-                      style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:selectedBrand?.id===b.id?"rgba(255,159,10,0.06)":"#F9F9F9",borderRadius:12,cursor:"pointer",border:selectedBrand?.id===b.id?"1.5px solid rgba(255,159,10,0.4)":"1.5px solid transparent",transition:"all 0.15s"}}>
-                      <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,159,10,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🏪</div>
-                      <div style={{flex:1,fontSize:14,fontWeight:600,color:"#1C1C1E"}}>{b.name}</div>
-                      {selectedBrand?.id===b.id&&<div style={{width:22,height:22,borderRadius:"50%",background:"#FF9F0A",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#fff",fontWeight:700}}>✓</div>}
+                {extractedStoreName&&(
+                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:"rgba(48,209,88,0.06)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:10,marginBottom:14}}>
+                    <span style={{fontSize:14}}>🤖</span>
+                    <div style={{flex:1,fontSize:12,color:"#30D158",fontWeight:500}}>
+                      Detected from flyer: <strong>{extractedStoreName}</strong>
+                      {pendingExtractedLocs.length>0&&<span style={{marginLeft:6,color:"#FF9F0A"}}>· {pendingExtractedLocs.length} location{pendingExtractedLocs.length>1?"s":""} to add</span>}
                     </div>
-                  ))}
+                  </div>
+                )}
+                {/* Store dropdown */}
+                <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:6}}>SELECT STORE</div>
+                <div style={{display:"flex",gap:6,marginBottom:showAddBrand?0:14}}>
+                  <select
+                    value={selectedBrand?.id||""}
+                    onChange={e=>{const b=brands.find(b=>b.id===e.target.value)||null;setSelectedBrand(b);setSelectedLocs([]);setPendingExtractedLocs([]);if(b)fetchLocations(b.id);else setLocations([]);}}
+                    style={{flex:1,background:"#F2F2F7",border:"none",borderRadius:10,padding:"11px 12px",fontSize:14,color:selectedBrand?"#1C1C1E":"#AEAEB2",outline:"none",cursor:"pointer"}}>
+                    <option value="">— Select store —</option>
+                    {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                  <button onClick={()=>{setShowAddBrand(v=>!v);setNewBrandName("");}}
+                    style={{padding:"11px 14px",background:"rgba(255,159,10,0.1)",border:"none",borderRadius:10,fontSize:13,fontWeight:600,color:"#FF9F0A",cursor:"pointer",whiteSpace:"nowrap" as const}}>
+                    + New
+                  </button>
                 </div>
-                {showAddBrand?(
-                  <div style={{padding:"14px",background:"rgba(255,159,10,0.05)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,marginBottom:16}}>
+                {showAddBrand&&(
+                  <div style={{padding:"14px",background:"rgba(255,159,10,0.05)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,marginBottom:14,marginTop:8}}>
                     <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>NEW STORE</div>
                     <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
                       <input value={newBrandName} onChange={e=>setNewBrandName(e.target.value)} autoFocus
                         placeholder="Store name *"
                         style={{background:"#fff",border:"1px solid rgba(255,159,10,0.4)",borderRadius:9,padding:"9px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
                       <input value={newBrandWebsite} onChange={e=>setNewBrandWebsite(e.target.value)}
-                        placeholder="Website (e.g. walmart.com)"
+                        placeholder="Website (optional)"
                         style={{background:"#fff",border:"1px solid #E5E5EA",borderRadius:9,padding:"9px 12px",fontSize:13,color:"#1C1C1E",outline:"none"}}/>
                       <input value={newBrandPhone} onChange={e=>setNewBrandPhone(e.target.value)}
                         placeholder="Phone (optional)"
@@ -605,39 +705,63 @@ export default function PostDealPage() {
                       </div>
                     </div>
                   </div>
-                ):(
-                  <button onClick={()=>setShowAddBrand(true)}
-                    style={{width:"100%",padding:"11px 16px",background:"rgba(255,159,10,0.04)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,fontSize:13,fontWeight:600,color:"#FF9F0A",cursor:"pointer",textAlign:"left" as const,marginBottom:16}}>
-                    + Add New Store
-                  </button>
                 )}
                 {selectedBrand&&(
                   <>
-                    <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>VALID AT</div>
-                    <div style={{display:"flex",background:"#F2F2F7",borderRadius:12,padding:3,gap:3,marginBottom:16}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:6}}>VALID AT</div>
+                    <div style={{display:"flex",background:"#F2F2F7",borderRadius:12,padding:3,gap:3,marginBottom:12}}>
                       {([["all","🌐 All Branches"],["specific","📍 Specific Branches"]] as const).map(([m,l])=>(
                         <button key={m} onClick={()=>setLocationMode(m)} style={{flex:1,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:locationMode===m?"#fff":"transparent",color:locationMode===m?"#1C1C1E":"#AEAEB2",boxShadow:locationMode===m?"0 1px 3px rgba(0,0,0,0.08)":"none"}}>{l}</button>
                       ))}
                     </div>
-                    {locationMode==="specific"&&locations.length>0&&(
-                      <div style={{display:"flex",flexDirection:"column" as const,gap:6,marginBottom:16}}>
-                        {locations.map(loc=>(
-                          <div key={loc.id} onClick={()=>setSelectedLocs(prev=>prev.includes(loc.id)?prev.filter(id=>id!==loc.id):[...prev,loc.id])}
-                            style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:selectedLocs.includes(loc.id)?"rgba(255,159,10,0.06)":"#F9F9F9",borderRadius:12,cursor:"pointer",border:selectedLocs.includes(loc.id)?"1.5px solid rgba(255,159,10,0.4)":"1.5px solid transparent"}}>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:14,fontWeight:600,color:"#1C1C1E"}}>{loc.branch_name}</div>
-                              <div style={{fontSize:12,color:"#6D6D72"}}>{loc.address?`${loc.address}, `:""}{loc.city}{loc.state?`, ${loc.state}`:""}{loc.zip?` ${loc.zip}`:""}</div>
-                              {loc.phone&&<div style={{fontSize:11,color:"#AEAEB2"}}>📞 {loc.phone}</div>}
-                              {loc.map_link&&<a href={loc.map_link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:11,color:"#0A84FF",fontWeight:500,textDecoration:"none"}}>🗺️ View on map ↗</a>}
+
+                    {/* From-flyer pending locations (shown only when brand not yet created) */}
+                    {locationMode==="specific"&&pendingExtractedLocs.length>0&&!selectedBrand&&(
+                      <div style={{marginBottom:10,padding:"10px 12px",background:"rgba(255,159,10,0.05)",border:"1px solid rgba(255,159,10,0.25)",borderRadius:10}}>
+                        <div style={{fontSize:11,fontWeight:600,color:"#FF9F0A",marginBottom:6}}>
+                          🤖 {pendingExtractedLocs.length} branch{pendingExtractedLocs.length>1?"es":""} detected — will be auto-added when you create the store
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column" as const,gap:4}}>
+                          {pendingExtractedLocs.map((loc,idx)=>(
+                            <div key={idx} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#6D6D72"}}>
+                              <span style={{color:"#FF9F0A"}}>📍</span>
+                              <span>{loc.city}{loc.state?`, ${loc.state}`:""}{loc.address?` — ${loc.address}`:""}{loc.zip?` ${loc.zip}`:""}</span>
                             </div>
-                            <div style={{width:22,height:22,borderRadius:"50%",background:selectedLocs.includes(loc.id)?"#FF9F0A":"#E5E5EA",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#fff",fontWeight:700}}>
-                              {selectedLocs.includes(loc.id)?"✓":""}
-                            </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                     )}
-                    {locationMode==="specific"&&locations.length===0&&<div style={{fontSize:13,color:"#AEAEB2",textAlign:"center",padding:"8px 0"}}>No branches yet</div>}
+
+                    {/* Location dropdown (specific mode) */}
+                    {locationMode==="specific"&&(
+                      <div style={{marginBottom:12}}>
+                        <select
+                          value=""
+                          onChange={e=>{const id=e.target.value;if(id&&!selectedLocs.includes(id))setSelectedLocs(prev=>[...prev,id]);}}
+                          style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"11px 12px",fontSize:14,color:locations.filter(l=>!selectedLocs.includes(l.id)).length?"#1C1C1E":"#AEAEB2",outline:"none",cursor:"pointer",marginBottom:selectedLocs.length?8:0}}>
+                          <option value="">{locations.length===0?"No branches yet — add one below":"— Select a branch to add —"}</option>
+                          {locations.filter(l=>!selectedLocs.includes(l.id)).map(l=>(
+                            <option key={l.id} value={l.id}>{l.branch_name}{l.city?` · ${l.city}`:""}{ l.zip?` ${l.zip}`:""}</option>
+                          ))}
+                        </select>
+                        {/* Selected location chips */}
+                        {selectedLocs.length>0&&(
+                          <div style={{display:"flex",flexWrap:"wrap" as const,gap:6}}>
+                            {selectedLocs.map(id=>{
+                              const loc=locations.find(l=>l.id===id);
+                              if(!loc) return null;
+                              return(
+                                <div key={id} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",background:"rgba(255,159,10,0.1)",border:"1px solid rgba(255,159,10,0.3)",borderRadius:20}}>
+                                  <span style={{fontSize:12,fontWeight:600,color:"#FF9F0A"}}>{loc.branch_name}{loc.city?` · ${loc.city}`:""}</span>
+                                  <button onClick={()=>setSelectedLocs(prev=>prev.filter(i=>i!==id))}
+                                    style={{background:"none",border:"none",fontSize:11,color:"#FF9F0A",cursor:"pointer",padding:0,lineHeight:1,fontWeight:700}}>✕</button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {locationMode==="specific"&&(showAddLoc?(
                       <div style={{padding:"14px",background:"rgba(255,159,10,0.05)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,marginBottom:12}}>
                         <div style={{fontSize:11,fontWeight:600,color:"#AEAEB2",marginBottom:8}}>NEW LOCATION</div>

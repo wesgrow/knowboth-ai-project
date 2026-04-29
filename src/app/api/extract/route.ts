@@ -50,6 +50,19 @@ function sanitizeItems(items: any[]): any[] {
     .filter(item => item.name.length > 0 && item.price > 0);
 }
 
+function sanitizeLocations(locs: any[]): object[] {
+  if (!Array.isArray(locs)) return [];
+  return locs
+    .filter(l => l && typeof l === "object" && String(l.city || "").trim())
+    .map(l => ({
+      address: String(l.address || "").trim().slice(0, 200),
+      city: String(l.city || "").trim().slice(0, 100),
+      state: String(l.state || "").trim().toUpperCase().slice(0, 2),
+      zip: String(l.zip || "").trim().replace(/\D/g, "").slice(0, 5),
+      phone: String(l.phone || "").trim().slice(0, 20),
+    }));
+}
+
 async function callClaudeWithRetry(content: any[], attempt = 1): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
@@ -107,10 +120,7 @@ export async function POST(req: Request) {
     }
 
     const { store, b64, mime, url } = body;
-
-    if (!store || typeof store !== "string" || store.trim().length === 0) {
-      return NextResponse.json({ error: "Store name is required" }, { status: 400 });
-    }
+    const storeName = typeof store === "string" ? store.trim() : "";
 
     // 2. Build content
     const content: any[] = [];
@@ -134,14 +144,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Either image (b64+mime) or URL is required" }, { status: 400 });
     }
 
-    content.push({ type: "text", text: `Extract ALL deal items from this grocery flyer for store: ${store.trim()}.
+    content.push({ type: "text", text: `Extract the store info and ALL deal items from this grocery flyer${storeName ? ` (store: ${storeName})` : ""}.
+
+Return ONLY valid JSON, no markdown, no backticks:
+{"store_name":"Patel Brothers","store_locations":[{"address":"2610 Patriot Blvd","city":"Glenview","state":"IL","zip":"60026","phone":""}],"items":[{"name":"Toor Dal 4lb","normalized_name":"toor dal 4lb","price":4.99,"regular_price":6.99,"unit":"bag","category":"Lentils & Dals","notes":""}]}
 
 Category must be exactly one of: Vegetables, Fruits, Dairy, Rice & Grains, Lentils & Dals, Spices, Snacks, Beverages, Oils & Ghee, Frozen, Bakery, Meat & Fish, Household, Other.
 
-Return ONLY valid JSON, no markdown, no backticks:
-{"items":[{"name":"Toor Dal 4lb","normalized_name":"toor dal 4lb","price":4.99,"regular_price":6.99,"unit":"bag","category":"Lentils & Dals","notes":""}]}
+Store rules:
+- store_name: chain/brand name from the flyer header or logo (e.g. "Patel Brothers"). Use "" if not visible.
+- store_locations: list ALL branch addresses shown anywhere in the flyer (footer, "valid at:" section, address blocks, store list).
+  Each: {"address":"street or ''","city":"","state":"2-letter or ''","zip":"5-digit or ''","phone":"or ''"}
+  Return [] if no specific branch addresses are listed.
 
-Rules:
+Item rules:
 - name = full product name with brand and size. Expand all abbreviations.
 - normalized_name = lowercase version of name
 - price = sale/deal price (required, must be > 0)
@@ -165,7 +181,9 @@ Rules:
       }, { status: 422 });
     }
 
-    return NextResponse.json({ items });
+    const store_name = String(parsed.store_name || "").trim().slice(0, 200);
+    const store_locations = sanitizeLocations(parsed.store_locations);
+    return NextResponse.json({ store_name, store_locations, items });
 
   } catch (e: any) {
     console.error("Extract API error:", e);

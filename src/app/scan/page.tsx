@@ -92,6 +92,7 @@ export default function ScanPage() {
   const [newLocMapLink, setNewLocMapLink] = useState("");
   const [lookingUpLoc, setLookingUpLoc] = useState(false);
   const [addingLoc, setAddingLoc] = useState(false);
+  const [autoLinked, setAutoLinked] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(()=>{
@@ -99,9 +100,43 @@ export default function ScanPage() {
     if (!localStorage.getItem("kb_scan_consent")) setShowConsent(true);
   },[]);
 
-  async function fetchBrandLocations(brandId:string) {
+  async function fetchBrandLocations(brandId:string): Promise<any[]> {
     const {data}=await supabase.from("store_locations").select("id,branch_name,address,city,state,zip,phone,lat,lng,map_link").eq("brand_id",brandId).order("city");
-    setLocations(data||[]);
+    const locs = data||[];
+    setLocations(locs);
+    return locs;
+  }
+
+  function normStr(s:string){ return s.toLowerCase().replace(/[^a-z0-9]/g,""); }
+
+  async function autoLinkStore(storeName:string, city:string, zip:string) {
+    if (!storeName.trim()) return;
+    const allBrands: any[] = await supabase.from("brands").select("id,name,slug").order("name").then(({data})=>data||[]);
+    setBrands(allBrands);
+    const ns = normStr(storeName);
+    const match = allBrands.find(b=>{ const nb=normStr(b.name); return nb===ns||nb.includes(ns)||ns.includes(nb); });
+    if (match) {
+      setLinkedBrand(match);
+      setLinkedLocation(null);
+      const locs = await fetchBrandLocations(match.id);
+      const locMatch = locs.find(l=>
+        (zip && l.zip && l.zip.replace(/\D/g,"")===zip.replace(/\D/g,"")) ||
+        (city && l.city && normStr(l.city)===normStr(city))
+      );
+      if (locMatch) {
+        setLinkedLocation(locMatch);
+      } else if (city||zip) {
+        if (city) setNewLocCity(city);
+        if (zip) setNewLocZip(zip);
+        setShowAddLoc(true);
+      }
+    } else {
+      setNewBrandName(storeName);
+      if (city) setNewLocCity(city);
+      if (zip) setNewLocZip(zip);
+      setShowAddBrand(true);
+    }
+    setAutoLinked(true);
   }
 
   function toSlug(name:string){ return name.toLowerCase().trim().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,""); }
@@ -167,7 +202,9 @@ export default function ScanPage() {
   function handleFile(f: File) {
     setFile(f); setPreview(URL.createObjectURL(f));
     setResult(null); setSaved(false); setItems([]); setBillNumber(""); setDupWarn(null); setScanError(null);
-    setLinkedBrand(null); setLinkedLocation(null); setLocations([]); setStep("upload");
+    setLinkedBrand(null); setLinkedLocation(null); setLocations([]); setAutoLinked(false);
+    setNewBrandName(""); setNewLocCity(""); setNewLocZip(""); setShowAddBrand(false); setShowAddLoc(false);
+    setStep("upload");
   }
 
   function toB64(f: File): Promise<string> {
@@ -192,6 +229,7 @@ export default function ScanPage() {
       setResult(data); setItems(extracted); setManualTotal(data.total||0); setBillNumber(data.bill_number||"");
       setStep("review");
       toast.success(`✦ ${extracted.length} items found!`);
+      if (data.store_name) await autoLinkStore(data.store_name, data.store_city||"", data.store_zip||"");
     } catch(e:any) {
       setScanError(e.message||"Something went wrong. Please try again.");
     }
@@ -482,6 +520,19 @@ export default function ScanPage() {
                     <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>🏪 Link to Store</div>
                     {linkedBrand&&<span style={{fontSize:11,color:"#30D158",fontWeight:600}}>✓ {linkedBrand.name}</span>}
                   </div>
+                  {autoLinked&&result?.store_name&&(
+                    <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:linkedBrand?"rgba(48,209,88,0.06)":"rgba(255,159,10,0.06)",border:`1px solid ${linkedBrand?"rgba(48,209,88,0.2)":"rgba(255,159,10,0.25)"}`,borderRadius:9,marginBottom:10}}>
+                      <span style={{fontSize:13}}>🤖</span>
+                      <div style={{flex:1,fontSize:11,lineHeight:1.4}}>
+                        <span style={{fontWeight:600,color:linkedBrand?"#30D158":"#FF9F0A"}}>
+                          {linkedBrand?"Auto-linked:":"Not found — review below:"}
+                        </span>
+                        <span style={{color:"var(--text2)",marginLeft:4}}>{result.store_name}{result.store_city?` · ${result.store_city}`:""}
+                          {linkedBrand&&linkedLocation?<span style={{color:"#30D158"}}> · location matched</span>:linkedBrand?<span style={{color:"#FF9F0A"}}> · add location below</span>:null}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   {!showAddBrand?(
                     <div style={{display:"flex",gap:6,marginBottom:linkedBrand?10:0}}>
                       <select value={linkedBrand?.id||""} onChange={e=>{const b=brands.find(b=>b.id===e.target.value)||null;setLinkedBrand(b);setLinkedLocation(null);if(b)fetchBrandLocations(b.id);else setLocations([]);}}
