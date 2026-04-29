@@ -412,7 +412,7 @@ export default function PostDealPage() {
       // Deduplicate: check existing deals for same brand + date + location
       let query=supabase.from("deals").select("id").eq("brand_id",selectedBrand.id).eq("sale_start",saleStart);
       if(locationMode==="specific"&&selectedLocs.length===1) query=(query as any).eq("location_id",selectedLocs[0]);
-      const{data:existingDeals}=await withPublishTimeout(query as any);
+      const{data:existingDeals}=await withPublishTimeout(query as any) as {data:any[]|null};
       let itemsToPublish=items;
       if(existingDeals&&existingDeals.length>0){
         const dealIds=existingDeals.map((d:any)=>d.id);
