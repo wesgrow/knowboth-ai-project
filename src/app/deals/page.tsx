@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 const CATS = ["All","Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household"];
 const SORTS = [{v:"newest",l:"Newest"},{v:"price_asc",l:"Price ↑"},{v:"savings",l:"Savings"},{v:"expiring",l:"Expiring"}];
 const PRICE_ORDER = ["Under $1","$1 – $3","$3 – $10","$10 – $25","Over $25"];
+const PAGE_SIZE = 40;
 type View = "list"|"table"|"cards";
 type GroupBy = "category"|"store"|"price";
 
@@ -31,9 +32,11 @@ function DealsContent() {
   const [stores, setStores] = useState<string[]>([]);
   const [phItems, setPhItems] = useState<any[]>([]);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
   const { addToCart, cart } = useAppStore();
 
   useEffect(() => { fetchDeals(); }, []);
+  useEffect(() => { setPage(1); }, [search, cat, storeFilter, sort, maxPrice, onSale, expiringSoon, freshToday, groupBy]);
 
   // Search price_history when user types — debounced, server-side
   useEffect(() => {
@@ -130,9 +133,14 @@ function DealsContent() {
     return item.category || "Other";
   }
 
+  // Paginate posted deals before grouping
+  const dealFiltered = filtered.filter(i => !i.from_price_history);
+  const totalPages = Math.max(1, Math.ceil(dealFiltered.length / PAGE_SIZE));
+  const pagedItems = dealFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   // Group posted deals by chosen dimension → item
   const groupedRaw: Record<string, Record<string, any[]>> = {};
-  filtered.filter(i => !i.from_price_history).forEach(item => {
+  pagedItems.forEach(item => {
     const gk = groupKey(item);
     const ik = item.normalized_name || item.name?.toLowerCase() || "";
     if (!groupedRaw[gk]) groupedRaw[gk] = {};
@@ -212,7 +220,7 @@ function DealsContent() {
               {/* Right: count + view + sort + post */}
               <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0, flexWrap:"wrap" as const }}>
                 <span style={{ fontSize:11, color:"#AEAEB2", fontWeight:500 }}>
-                  {filtered.filter(i=>!i.from_price_history).length} deal{filtered.filter(i=>!i.from_price_history).length!==1?"s":""}
+                  {dealFiltered.length} deal{dealFiltered.length!==1?"s":""}
                   {phItems.length>0 && ` · ${filtered.filter(i=>i.from_price_history).length} community`}
                 </span>
                 <div style={{ width:1, height:18, background:"#E5E5EA" }}/>
@@ -376,6 +384,48 @@ function DealsContent() {
                 </div>
               </div>
             ))}
+
+            {/* ── PAGINATION ── */}
+            {totalPages > 1 && (
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 2px", marginBottom:8, flexWrap:"wrap" as const, gap:8 }}>
+                <span style={{ fontSize:12, color:"#AEAEB2", fontWeight:500 }}>
+                  Showing {(page-1)*PAGE_SIZE+1}–{Math.min(page*PAGE_SIZE, dealFiltered.length)} of {dealFiltered.length} items
+                </span>
+                <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                  <button disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))}
+                    style={{ padding:"6px 14px", borderRadius:9, fontSize:12, fontWeight:600, border:"none", cursor:page===1?"default":"pointer", background:page===1?"#F2F2F7":"#fff", color:page===1?"#C8C8CC":"#1C1C1E", boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
+                    ← Prev
+                  </button>
+                  {Array.from({length:totalPages},(_, i)=>i+1).filter(n=>{
+                    if(totalPages<=7) return true;
+                    if(n===1||n===totalPages) return true;
+                    if(Math.abs(n-page)<=1) return true;
+                    if(n===page-2||n===page+2) return "ellipsis";
+                    return false;
+                  }).map((n,i,arr)=>{
+                    if(n==="ellipsis") return null;
+                    const prev = arr[i-1];
+                    const showEllipsisBefore = typeof prev==="number" && (n as number)-prev>1;
+                    return (
+                      <span key={n} style={{display:"flex",alignItems:"center",gap:4}}>
+                        {showEllipsisBefore && <span style={{fontSize:12,color:"#AEAEB2",padding:"0 2px"}}>…</span>}
+                        <button onClick={()=>setPage(n as number)}
+                          style={{ width:34, height:34, borderRadius:9, fontSize:12, fontWeight:700, border:"none", cursor:"pointer",
+                            background: page===n ? "linear-gradient(135deg,#FF9F0A,#D4800A)" : "#fff",
+                            color: page===n ? "#fff" : "#1C1C1E",
+                            boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
+                          {n}
+                        </button>
+                      </span>
+                    );
+                  })}
+                  <button disabled={page===totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}
+                    style={{ padding:"6px 14px", borderRadius:9, fontSize:12, fontWeight:600, border:"none", cursor:page===totalPages?"default":"pointer", background:page===totalPages?"#F2F2F7":"#fff", color:page===totalPages?"#C8C8CC":"#1C1C1E", boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ── COMMUNITY PRICES (list view, shown when searching) ── */}
             {view === "list" && Object.keys(communityGrouped).length > 0 && (
