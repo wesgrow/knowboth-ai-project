@@ -615,7 +615,7 @@ export default function ScanPage() {
                           <div style={{textAlign:"right",flexShrink:0}}>
                             <div style={{fontSize:15,fontWeight:700,color:item.unit_price>0?"#FF9F0A":"#FF3B30"}}>${item.actual_price.toFixed(2)}</div>
                             <div style={{fontSize:10,color:"var(--text3)"}}>${item.unit_price.toFixed(2)}/ea × {item.quantity}</div>
-                            {item.discount>0&&<div style={{fontSize:10,color:"#30D158",fontWeight:600}}>−${item.discount.toFixed(2)} saved</div>}
+                            {(item.discount??0)>0&&<div style={{fontSize:10,color:"#30D158",fontWeight:600}}>−${(item.discount??0).toFixed(2)} saved</div>}
                           </div>
                         </div>
                         <button onClick={e=>{e.stopPropagation();removeItem(item.id);}} style={{background:"rgba(255,59,48,0.1)",border:"none",borderRadius:8,padding:"5px 8px",fontSize:11,color:"#FF3B30",cursor:"pointer",flexShrink:0}}>✕</button>
