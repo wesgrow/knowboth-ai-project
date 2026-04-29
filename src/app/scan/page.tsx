@@ -19,6 +19,7 @@ interface BillItem {
   unit: string;
   category: string;
   confidence: number;
+  discount?: number;
 }
 
 function ConfidenceBadge({ score }: { score: number }) {
