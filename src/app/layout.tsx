@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthSync } from "@/components/AuthSync";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Navbar } from "@/components/Navbar";
+import { ChatWidget } from "@/components/ChatWidget";
 import { Toaster } from "react-hot-toast";
 
 export const viewport = { themeColor: "#FF9F0A" };
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="main-content">
           {children}
         </div>
+        <ChatWidget/>
         <Toaster
           position="top-right"
           toastOptions={{

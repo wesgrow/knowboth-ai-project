@@ -19,7 +19,6 @@ const NAV_MORE = [
   { href:"/expenses",  icon:"📊", label:"Expenses" },
   { href:"/analytics", icon:"📈", label:"Analytics" },
   { href:"/community", icon:"👥", label:"Community" },
-  { href:"/chat",      icon:"🤖", label:"AI Chat" },
 ];
 const BOTTOM_TABS = [
   { href:"/home",  icon:"🏠", label:"Home" },

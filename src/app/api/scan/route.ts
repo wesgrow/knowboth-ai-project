@@ -71,18 +71,28 @@ function inferUnitFromName(name: string): string {
   return "ea";
 }
 
+function cleanStr(v: any): string {
+  return String(v||"").replace(/[\n\r\t]+/g," ").replace(/\s{2,}/g," ").trim();
+}
+
+function cleanPrice(v: any): number {
+  return Math.max(0, parseFloat(String(v||"").replace(/[$,₹€£\s]/g,"")) || 0);
+}
+
 function sanitizeItems(items: any[]): any[] {
   if (!Array.isArray(items)) return [];
   return items
     .filter(i => i && typeof i === "object")
     .map((item, idx) => {
-      const name = String(item.name || `Item ${idx+1}`).trim().slice(0,200);
-      const unitPrice = Math.max(0, parseFloat(item.unit_price) || parseFloat(item.price) || 0);
+      const name = cleanStr(item.name || `Item ${idx+1}`).slice(0,200);
+      const unitPrice = cleanPrice(item.unit_price) || cleanPrice(item.price);
       const quantity = Math.max(1, parseInt(item.quantity) || 1);
-      const actualPrice = Math.max(0, parseFloat(item.actual_price) || parseFloat(item.price) || (unitPrice * quantity));
-      const unit = normalizeUnit(String(item.unit||""), name);
+      const discount = cleanPrice(item.discount);
+      const rawActual = cleanPrice(item.actual_price) || cleanPrice(item.price) || (unitPrice * quantity);
+      const actualPrice = Math.max(0, rawActual - discount);
+      const unit = normalizeUnit(cleanStr(item.unit), name);
       const category = VALID_CATEGORIES.includes(item.category) ? item.category : "Other";
-      return { name, unit_price: unitPrice, actual_price: actualPrice, quantity, unit, category };
+      return { name, unit_price: unitPrice, actual_price: actualPrice, quantity, unit, category, discount };
     })
     .filter(i => i.name.length > 0);
 }
@@ -101,37 +111,116 @@ async function callClaude(b64: string, mime: string, attempt = 1): Promise<strin
           role: "user",
           content: [
             { type:"image", source:{ type:"base64", media_type:mime, data:b64 } },
-            { type:"text", text:`You are an expert receipt scanner. Extract every line item from this receipt with maximum accuracy.
+            { type:"text", text:`You are an expert grocery receipt scanner. Follow every rule exactly.
 
-Return ONLY valid JSON:
-{"store_name":"","store_city":"","store_zip":"","bill_number":"","purchase_date":"YYYY-MM-DD","currency":"USD","total":0.00,"items":[{"name":"","unit_price":0.00,"actual_price":0.00,"quantity":1,"unit":"","category":""}]}
+━━━ STEP 1 — CLASSIFY ━━━
+Is this a receipt, bill, or invoice from a store/restaurant/service?
+- NO (selfie, ID, passport, blank, screenshot): return ONLY {"is_receipt":false}
+- YES: continue to Step 2.
 
-CRITICAL RULES:
-1. NAME: Always expand abbreviations to full product names. Include brand + size/weight.
-   Examples: "T DAL 4LB"→"Toor Dal 4lb", "BAS RCE 20L"→"Basmati Rice 20lb", "AMUL GHE 1L"→"Amul Ghee 1L", "CHK BRST 2LB"→"Chicken Breast 2lb", "TOMATOE"→"Tomatoes"
+━━━ STEP 2 — READ RAW TEXT FIRST ━━━
+Before extracting any field, read each item line exactly as printed. Note the raw text.
+Then apply the rules below to produce clean output.
 
-2. UNIT: Extract the EXACT unit from the receipt or product name:
-   - Weight: lb, kg, oz, g
-   - Volume: L, ml, gallon, pint
-   - Packaging: bag, pack, box, bottle, jar, bunch, dozen, ea
-   - Look for units in both the product name AND the receipt line
-   - NEVER use "ea" if a real unit is visible
+━━━ OUTPUT FORMAT ━━━
+Return ONLY valid JSON — no markdown, no explanation:
+{"is_receipt":true,"store_name":"","store_city":"","store_zip":"","bill_number":"","purchase_date":"YYYY-MM-DD","currency":"USD","total":0.00,"items":[{"raw_name":"","name":"","unit_price":0.00,"actual_price":0.00,"quantity":1,"unit":"","category":"","discount":0.00}]}
 
-3. PRICES:
-   - unit_price = price for ONE unit (e.g., $4.99/lb)
-   - actual_price = total charged on receipt for this line (e.g., $9.98 for 2lb)
-   - If receipt shows only one price, use it for both
-   - Prices must be positive numbers with 2 decimal places
+━━━ RULE 1 — ITEM NAME (most important) ━━━
+A. Read the raw text verbatim first, store it in "raw_name".
+B. Expand abbreviations ONLY if you are ≥90% certain. If uncertain, keep the original text.
+   WRONG approach: guess a plausible word. RIGHT approach: leave the abbreviation as-is.
+   Example: "GV WHOLE HG" — if unsure what HG means, output "GV Whole HG", NOT "Great Value Whole Hog".
 
-4. QUANTITY: Integer. How many units were purchased.
+C. KNOWN STORE BRAND CODES (expand these confidently):
+   GV → Great Value (Walmart)      KR → Kroger brand
+   SE → Simple Enjoy               SF → Signature Select (Safeway)
+   KS → Kirkland Signature         NV → Nice! (Walgreens)
+   GE → Great Eats                 WM → Walmart store
+   PL → Private Label              OB → O Organics
 
-5. TOTAL: The final total on the receipt (after tax if shown, before tax otherwise)
+D. KNOWN SIZE/UNIT CODES (expand these confidently):
+   HG / HF GAL → Half Gallon       1G / 1GL / GL → 1 Gallon
+   QT → Quart                      PT → Pint
+   LB / LBS → lb                   OZ → oz
+   KG → kg                         ML → ml
+   CT / CNT → count                PK / PKG → pack
+   BT / BTL → bottle               JR → jar
+   BG → bag                        DZ → dozen
 
-6. CATEGORY: Exactly one of: Grocery, Vegetables, Fruits, Dairy, Rice & Grains, Lentils & Dals, Spices, Snacks, Beverages, Oils & Ghee, Frozen, Meat & Fish, Bakery, Gas, Restaurant, Pharmacy, Household, Electronics, Other
+E. KNOWN PRODUCT ABBREVIATIONS (expand these confidently):
+   MLK / MK → Milk                 ORG / ORGN → Organic
+   WHL / WH → Whole                FF → Fat Free
+   2% / LF → 2% / Low Fat         SK → Skim
+   CHK / CKN / CHKN → Chicken     BF → Beef
+   TRK → Turkey                   PK → Pork
+   GRN → Green                    VEG → Vegetable
+   FRZ / FRN → Frozen             FRSH → Fresh
+   YO / YOG → Yogurt              CHZ / CHS → Cheese
+   BTR → Butter                   EGG → Eggs
+   BRD → Bread                    JUC / JC → Juice
+   WTR → Water                    SOD → Soda
+   DAL / DL → Dal                 RCE / RC → Rice
+   ATT / ATTA → Atta (wheat flour) GHE → Ghee
+   MSR / MSTR → Mustard           TOM → Tomatoes
+   POT → Potatoes                 BAN → Bananas
+   APP → Apples                   ONG → Onions
 
-7. BILL NUMBER: Extract the receipt, transaction, or invoice number (e.g. "#1234", "Trans: 8876", "Invoice 00042"). Leave empty string "" if not visible.
+F. NOISE TO STRIP from item names (do not include in name):
+   - Leading PLU/barcode numbers (5–13 digits)
+   - Trailing single letters that are tax codes: F, T, N, E, O, A, B
+   - Asterisk (*) prefix — just means weekly special
+   - Department codes like "D1", "D2", "GR", "PR" at end of line
 
-8. Include ALL line items. Do not skip any. No trailing commas.` }
+━━━ RULE 2 — UNIT OF MEASUREMENT ━━━
+Extract the unit from BOTH the product name AND the receipt line.
+Priority order: (1) explicit unit in name like "1 GAL", "4 LB", "32 OZ" → use that
+               (2) unit code from the lookup above
+               (3) "ea" only as absolute last resort
+NEVER use "ea" if any weight, volume, or packaging indicator is visible anywhere on that line.
+
+For WEIGHT-PRICED items (format: "1.43 lb @ $0.49/lb  $0.70"):
+  quantity = actual weight (1.43), unit = "lb", unit_price = price-per-lb (0.49), actual_price = 0.70
+
+━━━ RULE 3 — PRICES & MATH VERIFICATION ━━━
+- unit_price = price for ONE unit (after any per-unit deal)
+- actual_price = line total charged BEFORE discount
+- discount = saving applied to this line (0 if none, always positive)
+- VERIFY: unit_price × quantity must equal actual_price (within $0.02).
+  If it does not match, re-read the line — you have the wrong quantity or misread a digit.
+  Fix it before outputting.
+
+━━━ RULE 4 — MULTI-BUY DEALS (X for $Y) ━━━
+"2 for $1"   → unit_price=0.50, quantity=2, actual_price=1.00
+"3 for $5"   → unit_price=1.67, quantity=3, actual_price=5.00
+"7 for $1"   → unit_price=0.14, quantity=7, actual_price=1.00
+If only 1 unit bought at deal price: quantity=1, unit_price=deal_total/deal_count, actual_price=unit_price
+
+━━━ RULE 5 — DISCOUNTS ━━━
+Lines like "DISC", "SAVE", "MEMBER SAVINGS", "COUPON", "LOYALTY", negative amounts:
+- Attach to the item directly above it
+- discount = the saving amount as a positive number
+- Do NOT create a separate line item for the discount
+
+━━━ RULE 6 — RECEIPT LAYOUT ━━━
+Identify the format before parsing:
+- Format A: ITEM  QTY  UNIT_PRICE  TOTAL on one line
+- Format B: Item name line 1 / QTY × PRICE on line 2
+- Format C: Single price per line, no explicit quantity (quantity=1)
+Apply the same format rule consistently across all items.
+
+━━━ RULE 7 — CATEGORY ━━━
+Exactly one of: Grocery, Vegetables, Fruits, Dairy, Rice & Grains, Lentils & Dals, Spices, Snacks, Beverages, Oils & Ghee, Frozen, Meat & Fish, Bakery, Gas, Restaurant, Pharmacy, Household, Electronics, Other
+
+━━━ RULE 8 — OTHER FIELDS ━━━
+- total: final receipt total after all discounts and tax
+- bill_number: receipt/transaction number, "" if not visible
+- purchase_date: YYYY-MM-DD format
+- Include ALL product lines. Skip tax lines, subtotal lines, total summary lines.
+
+━━━ PII — NEVER CAPTURE ━━━
+Customer name, loyalty member name, cashier name, card numbers (VISA ****1234), CVV, PINs, loyalty card IDs, customer phone, customer address.
+Store name, store address, store phone are fine.` }
           ]
         }]
       }),
@@ -179,6 +268,10 @@ export async function POST(req: Request) {
 
     const rawText = await callClaude(b64, mime);
     const parsed = extractJSON(rawText);
+
+    if (parsed.is_receipt === false)
+      return NextResponse.json({error:"This doesn't look like a receipt or bill. Please upload a store receipt, invoice, or bill."},{status:422});
+
     const items = sanitizeItems(parsed.items||[]);
 
     if (items.length===0)

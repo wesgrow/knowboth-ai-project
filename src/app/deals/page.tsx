@@ -8,7 +8,9 @@ import toast from "react-hot-toast";
 
 const CATS = ["All","Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household"];
 const SORTS = [{v:"newest",l:"Newest"},{v:"price_asc",l:"Price ↑"},{v:"savings",l:"Savings"},{v:"expiring",l:"Expiring"}];
+const PRICE_ORDER = ["Under $1","$1 – $3","$3 – $10","$10 – $25","Over $25"];
 type View = "list"|"table"|"cards";
+type GroupBy = "category"|"store"|"price";
 
 function DealsContent() {
   const params = useSearchParams();
@@ -16,6 +18,7 @@ function DealsContent() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("list");
+  const [groupBy, setGroupBy] = useState<GroupBy>("category");
   const [search, setSearch] = useState(params.get("q") || "");
   const [cat, setCat] = useState("All");
   const [storeFilter, setStoreFilter] = useState("All");
@@ -114,16 +117,37 @@ function DealsContent() {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  // Group posted deals by category → item
-  const grouped: Record<string, Record<string, any[]>> = {};
+  function priceRange(p: number) {
+    if (p < 1) return "Under $1";
+    if (p < 3) return "$1 – $3";
+    if (p < 10) return "$3 – $10";
+    if (p < 25) return "$10 – $25";
+    return "Over $25";
+  }
+  function groupKey(item: any) {
+    if (groupBy === "store") return item.brand?.name || "Unknown Store";
+    if (groupBy === "price") return priceRange(item.price || 0);
+    return item.category || "Other";
+  }
+
+  // Group posted deals by chosen dimension → item
+  const groupedRaw: Record<string, Record<string, any[]>> = {};
   filtered.filter(i => !i.from_price_history).forEach(item => {
-    const c = item.category || "Other";
-    const key = item.normalized_name || item.name?.toLowerCase() || "";
-    if (!grouped[c]) grouped[c] = {};
-    if (!grouped[c][key]) grouped[c][key] = [];
-    grouped[c][key].push(item);
+    const gk = groupKey(item);
+    const ik = item.normalized_name || item.name?.toLowerCase() || "";
+    if (!groupedRaw[gk]) groupedRaw[gk] = {};
+    if (!groupedRaw[gk][ik]) groupedRaw[gk][ik] = [];
+    groupedRaw[gk][ik].push(item);
   });
-  Object.values(grouped).forEach(cg => { Object.values(cg).forEach(arr => arr.sort((a, b) => a.price - b.price)); });
+  Object.values(groupedRaw).forEach(cg => { Object.values(cg).forEach(arr => arr.sort((a, b) => a.price - b.price)); });
+
+  // Sort group keys: price ranges use fixed order, others alphabetical
+  const sortedGroupKeys = Object.keys(groupedRaw).sort((a, b) =>
+    groupBy === "price"
+      ? PRICE_ORDER.indexOf(a) - PRICE_ORDER.indexOf(b)
+      : a.localeCompare(b)
+  );
+  const grouped = Object.fromEntries(sortedGroupKeys.map(k => [k, groupedRaw[k]]));
 
   // Group community prices by item name (flat, no category split)
   const communityGrouped: Record<string, any[]> = {};
@@ -160,28 +184,68 @@ function DealsContent() {
               <input style={{ width: "100%", background: "#fff", border: "none", borderRadius: 12, padding: "12px 16px 12px 42px", fontSize: 15, color: "#1C1C1E", outline: "none", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search deals, items, stores..." />
             </div>
 
-            {/* Toolbar */}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" as const }}>
-              <button onClick={() => setShowPanel(!showPanel)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", background: showPanel || aF.length > 0 ? "#FF9F0A" : "#fff", color: showPanel || aF.length > 0 ? "#fff" : "#6D6D72", boxShadow: "0 1px 3px rgba(0,0,0,0.08)", whiteSpace: "nowrap" as const, flexShrink: 0 }}>
-                ⚙️ {aF.length > 0 ? `${aF.length} Active` : "Filter"}
-              </button>
-              <div style={{ display: "flex", gap: 6, overflowX: "auto", flex: 1 }}>
-                {aF.map((f, i) => (
-                  <button key={i} onClick={f.c} style={{ display: "flex", alignItems: "center", gap: 3, padding: "6px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" as const, cursor: "pointer", border: "none", flexShrink: 0, background: "rgba(255,159,10,0.1)", color: "#FF9F0A" }}>{f.l} ✕</button>
+            {/* Toolbar — single row on desktop, wraps on mobile */}
+            <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom: aF.length>0 ? 6 : 10, flexWrap:"wrap" as const }}>
+
+              {/* Left: Filter + divider + Group by */}
+              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" as const }}>
+                <button onClick={() => setShowPanel(!showPanel)}
+                  style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:20, fontSize:12, fontWeight:600, cursor:"pointer", border:"none", background: showPanel||aF.length>0 ? "#FF9F0A" : "#fff", color: showPanel||aF.length>0 ? "#fff" : "#6D6D72", boxShadow:"0 1px 3px rgba(0,0,0,0.08)", whiteSpace:"nowrap" as const, flexShrink:0 }}>
+                  ⚙️ {aF.length > 0 ? `${aF.length} Active` : "Filter"}
+                </button>
+                <div style={{ width:1, height:18, background:"#E5E5EA", flexShrink:0 }}/>
+                <span style={{ fontSize:11, color:"#AEAEB2", fontWeight:600, flexShrink:0 }}>Group by</span>
+                {([["category","📂 Category"],["store","🏪 Store"],["price","💰 Price"]] as const).map(([v,l]) => (
+                  <button key={v} onClick={() => setGroupBy(v)}
+                    style={{ padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:600, border:"none", cursor:"pointer", flexShrink:0,
+                      background: groupBy===v ? "#FF9F0A" : "#fff",
+                      color: groupBy===v ? "#fff" : "#6D6D72",
+                      boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
+                    {l}
+                  </button>
                 ))}
               </div>
-              <div style={{ display: "flex", background: "#fff", borderRadius: 10, padding: 2, gap: 1, flexShrink: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                {([["list", "≡"], ["table", "⊞"], ["cards", "▦"]] as const).map(([v, icon]) => (
-                  <button key={v} onClick={() => setView(v)} style={{ width: 34, height: 32, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 15, background: view === v ? "#F2F2F7" : "transparent", color: view === v ? "#1C1C1E" : "#AEAEB2", display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</button>
-                ))}
+
+              {/* Spacer */}
+              <div style={{ flex:1 }}/>
+
+              {/* Right: count + view + sort + post */}
+              <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0, flexWrap:"wrap" as const }}>
+                <span style={{ fontSize:11, color:"#AEAEB2", fontWeight:500 }}>
+                  {filtered.filter(i=>!i.from_price_history).length} deal{filtered.filter(i=>!i.from_price_history).length!==1?"s":""}
+                  {phItems.length>0 && ` · ${filtered.filter(i=>i.from_price_history).length} community`}
+                </span>
+                <div style={{ width:1, height:18, background:"#E5E5EA" }}/>
+                <div style={{ display:"flex", background:"#fff", borderRadius:10, padding:2, gap:1, boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
+                  {([["list","≡"],["table","⊞"],["cards","▦"]] as const).map(([v,icon]) => (
+                    <button key={v} onClick={() => setView(v)}
+                      style={{ width:32, height:30, borderRadius:8, border:"none", cursor:"pointer", fontSize:14, background: view===v ? "#F2F2F7" : "transparent", color: view===v ? "#1C1C1E" : "#AEAEB2", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+                <select value={sort} onChange={e => setSort(e.target.value)}
+                  style={{ background:"#fff", border:"none", borderRadius:10, padding:"7px 10px", fontSize:12, fontWeight:600, color:"#6D6D72", cursor:"pointer", boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
+                  {SORTS.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
+                </select>
+                <button onClick={() => router.push("/post-deal")}
+                  style={{ background:"linear-gradient(135deg,#FF9F0A,#D4800A)", color:"#fff", border:"none", borderRadius:10, padding:"7px 14px", fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" as const, boxShadow:"0 2px 6px rgba(255,159,10,0.3)" }}>
+                  📷 Post Deal
+                </button>
               </div>
-              <select value={sort} onChange={e => setSort(e.target.value)} style={{ background: "#fff", border: "none", borderRadius: 10, padding: "8px 10px", fontSize: 12, fontWeight: 600, color: "#6D6D72", cursor: "pointer", flexShrink: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                {SORTS.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
-              </select>
-              <button onClick={() => router.push("/post-deal")} style={{ background: "linear-gradient(135deg,#FF9F0A,#D4800A)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const, flexShrink: 0, boxShadow: "0 2px 6px rgba(255,159,10,0.3)" }}>
-                📷 Post Deal
-              </button>
             </div>
+
+            {/* Active filter chips — only shown when filters are active */}
+            {aF.length > 0 && (
+              <div style={{ display:"flex", gap:5, flexWrap:"wrap" as const, marginBottom:10 }}>
+                {aF.map((f,i) => (
+                  <button key={i} onClick={f.c}
+                    style={{ display:"flex", alignItems:"center", gap:3, padding:"5px 10px", borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:"nowrap" as const, cursor:"pointer", border:"none", background:"rgba(255,159,10,0.12)", color:"#FF9F0A" }}>
+                    {f.l} ✕
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Filter Panel */}
             {showPanel && (
@@ -217,10 +281,6 @@ function DealsContent() {
               </div>
             )}
 
-            <div style={{ fontSize: 12, color: "#AEAEB2", marginBottom: 10, fontWeight: 500 }}>
-              {filtered.filter(i => !i.from_price_history).length} deals
-              {phItems.length > 0 && ` · ${filtered.filter(i => i.from_price_history).length} community prices`}
-            </div>
             {loading && <div style={{ textAlign: "center", padding: "60px 0", color: "#AEAEB2" }}>Loading deals...</div>}
             {!loading && items.length === 0 && phItems.length === 0 && (
               <div style={{ textAlign: "center", padding: "60px 0" }}>

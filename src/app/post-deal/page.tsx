@@ -65,6 +65,7 @@ export default function PostDealPage() {
   const [saleStart, setSaleStart] = useState(new Date().toISOString().split("T")[0]);
   const [saleEnd, setSaleEnd] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<{skippedItems:DealItem[];toPublish:DealItem[]}|null>(null);
   const [editingId, setEditingId] = useState<string|null>(null);
   const [showFlyer, setShowFlyer] = useState(true);
   const [zoom, setZoom] = useState(1);
@@ -301,22 +302,40 @@ export default function PostDealPage() {
       // Deduplicate against existing deal_items for same store + sale date
       const{data:existingDeals}=await supabase.from("deals").select("id").eq("brand_id",selectedBrand.id).eq("sale_start",saleStart);
       let itemsToPublish=items;
-      let skippedCount=0;
       if(existingDeals&&existingDeals.length>0){
         const dealIds=existingDeals.map(d=>d.id);
         const{data:existingDealItems}=await supabase.from("deal_items").select("normalized_name,price").in("deal_id",dealIds);
         if(existingDealItems&&existingDealItems.length>0){
           const dupSet=new Set(existingDealItems.map(i=>`${i.normalized_name}|${i.price}`));
-          itemsToPublish=items.filter(i=>!dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
-          skippedCount=items.length-itemsToPublish.length;
+          const fresh=items.filter(i=>!dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
+          const dupes=items.filter(i=>dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
+          if(dupes.length>0){
+            setDuplicateWarning({skippedItems:dupes,toPublish:fresh});
+            setPublishing(false);
+            return;
+          }
+          itemsToPublish=fresh;
         }
       }
-      if(itemsToPublish.length===0){
-        toast.error("All items already exist for this store on this sale date");
-        return;
-      }
-      if(skippedCount>0) toast(`⚠️ ${skippedCount} duplicate item${skippedCount>1?"s":""} skipped`);
 
+      setPublishing(false);
+      await publishResolved(itemsToPublish);
+    }catch(e:any){
+      console.error("Publish error:", e);
+      toast.error(e.message||"Failed to publish. Check DevTools console for details.");
+    }finally{
+      setPublishing(false);
+    }
+  }
+
+  async function publishResolved(itemsToPublish: DealItem[]) {
+    if(!selectedBrand||itemsToPublish.length===0) return;
+    setDuplicateWarning(null);
+    setPublishing(true);
+    try{
+      const normalizeStr=(s:string)=>s.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
+      const{data:{session}}=await supabaseAuth.auth.getSession();
+      if(!session?.user?.id){toast.error("You must be signed in to post deals");return;}
       const{data:deal,error:de}=await supabase.from("deals").insert({
         brand_id:selectedBrand.id,
         posted_by:session.user.id,
@@ -325,11 +344,7 @@ export default function PostDealPage() {
         sale_start:saleStart,
         sale_end:saleEnd||null,
       }).select("id").single();
-      if(de||!deal?.id){
-        console.error("deals insert error:", de);
-        throw new Error(de?.message||"Failed to create deal");
-      }
-
+      if(de||!deal?.id){console.error("deals insert error:", de);throw new Error(de?.message||"Failed to create deal");}
       const{error:ie}=await supabase.from("deal_items").insert(itemsToPublish.map(i=>({
         deal_id:deal.id,name:i.name.trim(),
         normalized_name:normalizeStr(i.normalized_name||i.name),
@@ -337,16 +352,12 @@ export default function PostDealPage() {
         category:VALID_CATS.includes(i.category)?i.category:"Other",
         notes:i.notes||null,source:uploadMode==="image"?"flyer":"manual",
       })));
-      if(ie){
-        console.error("deal_items insert error:", ie);
-        throw new Error(ie.message);
-      }
-
+      if(ie){console.error("deal_items insert error:", ie);throw new Error(ie.message);}
       toast.success(`🚀 ${itemsToPublish.length} deal${itemsToPublish.length>1?"s":""} published!`);
       router.push("/deals");
     }catch(e:any){
       console.error("Publish error:", e);
-      toast.error(e.message||"Failed to publish. Check DevTools console for details.");
+      toast.error(e.message||"Failed to publish.");
     }finally{
       setPublishing(false);
     }
@@ -730,13 +741,60 @@ export default function PostDealPage() {
                     ))}
                   </div>
                 </div>
-                <div style={{display:"flex",gap:8}}>
+                {/* Public visibility notice */}
+                <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 14px",background:"rgba(10,132,255,0.05)",border:"1px solid rgba(10,132,255,0.18)",borderRadius:12,marginBottom:12}}>
+                  <span style={{fontSize:15,flexShrink:0}}>🌐</span>
+                  <div style={{fontSize:12,color:"#3A7BD5",lineHeight:1.5}}>
+                    <strong>Your deal will be publicly visible</strong> to all KNOWBOTH users once published. Only store names, item names and prices are shown — your account is not linked to the listing.
+                  </div>
+                </div>
+
+                {/* Duplicate warning card */}
+                {duplicateWarning&&(
+                  <div style={{background:"rgba(255,159,10,0.06)",border:"1.5px solid rgba(255,159,10,0.35)",borderRadius:14,padding:"16px",marginBottom:12}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:12}}>
+                      <span style={{fontSize:20,flexShrink:0}}>⚠️</span>
+                      <div>
+                        <div style={{fontSize:14,fontWeight:700,color:"#FF9F0A",marginBottom:3}}>
+                          {duplicateWarning.skippedItems.length} item{duplicateWarning.skippedItems.length>1?"s":""} already posted for {selectedBrand?.name} on {saleStart}
+                        </div>
+                        <div style={{fontSize:12,color:"#6D6D72"}}>
+                          {duplicateWarning.toPublish.length>0
+                            ?`Skip the duplicates and publish the remaining ${duplicateWarning.toPublish.length} new item${duplicateWarning.toPublish.length>1?"s":""}?`
+                            :"All items already exist — nothing new to publish."}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column" as const,gap:4,marginBottom:12,maxHeight:120,overflowY:"auto"}}>
+                      {duplicateWarning.skippedItems.map((item,i)=>(
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"rgba(255,159,10,0.08)",borderRadius:8}}>
+                          <span style={{fontSize:12,color:"#1C1C1E",fontWeight:500}}>{item.name}</span>
+                          <span style={{fontSize:12,color:"#FF9F0A",fontWeight:700}}>${item.price.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>setDuplicateWarning(null)}
+                        style={{flex:1,padding:"10px",background:"#F2F2F7",border:"none",borderRadius:10,fontSize:13,fontWeight:600,color:"#6D6D72",cursor:"pointer"}}>
+                        ← Cancel
+                      </button>
+                      {duplicateWarning.toPublish.length>0&&(
+                        <button onClick={()=>publishResolved(duplicateWarning.toPublish)} disabled={publishing}
+                          style={{flex:2,padding:"10px",background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:10,fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",opacity:publishing?0.7:1}}>
+                          {publishing?"Publishing...":` Skip & Publish ${duplicateWarning.toPublish.length} New`}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {!duplicateWarning&&<div style={{display:"flex",gap:8}}>
                   <button onClick={()=>setStep("store")} style={{flex:1,padding:14,background:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:600,color:"#6D6D72",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>← Edit</button>
                   <button onClick={publish} disabled={publishing}
                     style={{flex:2,padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:publishing?0.7:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
                     {publishing?"Publishing...":"🚀 Publish Live"}
                   </button>
-                </div>
+                </div>}
               </div>
             )}
 

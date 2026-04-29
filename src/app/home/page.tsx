@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
@@ -13,17 +13,16 @@ export default function HomePage() {
   const [thisMonthSpent, setThisMonthSpent] = useState(0);
   const [lastMonthSpent, setLastMonthSpent] = useState(0);
   const [totalBills, setTotalBills] = useState(0);
-  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [recentItems, setRecentItems] = useState<any[]>([]);
   const [expiringCount, setExpiringCount] = useState(0);
-  const [thisMonthSaved, setThisMonthSaved] = useState(0);
-  const [aiTip, setAiTip] = useState("Compare prices before shopping — deals change weekly.");
+  const [tip, setTip] = useState("Compare prices before shopping — deals change weekly.");
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingDeals, setLoadingDeals] = useState(true);
   const currency = user?.currency || "USD";
   const fmt = (n: number) => formatCurrency(n, currency);
   const cartCount = cart?.filter((i:any) => !i.purchased)?.length || 0;
 
-  useEffect(() => { fetchStats(); fetchDeals(); generateTip(); }, []);
+  useEffect(() => { fetchStats(); fetchDeals(); rotateTip(); }, []);
 
   async function fetchStats() {
     setLoadingStats(true);
@@ -36,27 +35,27 @@ export default function HomePage() {
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth()-1, 1).toISOString().split("T")[0];
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0];
 
-      const [{ data: thisMonth }, { data: lastMonth }, { count: bills }, { data: expenses }] = await Promise.all([
+      const [{ data: thisMonth }, { data: lastMonth }, { count: bills }] = await Promise.all([
         supabase.from("expenses").select("total").eq("user_id", userId).gte("purchase_date", thisMonthStart),
         supabase.from("expenses").select("total").eq("user_id", userId).gte("purchase_date", lastMonthStart).lte("purchase_date", lastMonthEnd),
         supabase.from("expenses").select("id", { count:"exact", head:true }).eq("user_id", userId),
-        supabase.from("expenses").select("id,store_name").eq("user_id", userId),
       ]);
 
       setThisMonthSpent((thisMonth||[]).reduce((s:number,e:any)=>s+Number(e.total),0));
       setLastMonthSpent((lastMonth||[]).reduce((s:number,e:any)=>s+Number(e.total),0));
       setTotalBills(bills||0);
 
-      if (expenses?.length) {
-        const expIds = expenses.map((e:any)=>e.id);
-        const expMap:Record<string,string> = {};
-        expenses.forEach((e:any)=>{ expMap[e.id]=e.store_name; });
-        const { data: items } = await supabase.from("expense_items")
-          .select("id,expense_id,name,quantity,category")
-          .in("expense_id", expIds).lte("quantity",1)
+      // Recent pantry items from latest bill
+      const { data: latestExp } = await supabase
+        .from("expenses").select("id,store_name,purchase_date")
+        .eq("user_id", userId).order("purchase_date",{ascending:false}).limit(1).single();
+      if (latestExp?.id) {
+        const { data: latestItems } = await supabase.from("expense_items")
+          .select("id,name,quantity,unit,category")
+          .eq("expense_id", latestExp.id)
           .in("category",["Grocery","Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Meat & Fish","Bakery","Household"])
           .limit(5);
-        setLowStockItems((items||[]).map((i:any)=>({...i,store:expMap[i.expense_id]})));
+        setRecentItems((latestItems||[]).map((i:any)=>({...i,store:latestExp.store_name,date:latestExp.purchase_date})));
       }
 
       const { data: dealRows } = await supabase.from("deals").select("id,sale_end").eq("status","approved").not("sale_end","is",null);
@@ -64,12 +63,6 @@ export default function HomePage() {
         const days = Math.ceil((new Date(d.sale_end).getTime()-Date.now())/86400000);
         return days>=0&&days<=3;
       }).length);
-
-      const { data: savedItems } = await supabase.from("deal_items").select("price,regular_price").not("regular_price","is",null).gte("created_at",thisMonthStart);
-      setThisMonthSaved((savedItems||[]).reduce((s:number,i:any)=>{
-        const saving = Number(i.regular_price)-Number(i.price);
-        return s+(saving>0?saving:0);
-      },0));
     } catch(e) { console.error("Stats error:",e); }
     setLoadingStats(false);
   }
@@ -90,21 +83,21 @@ export default function HomePage() {
     setLoadingDeals(false);
   }
 
-  async function generateTip() {
+  function rotateTip() {
     const tips = [
       "Compare prices before shopping — deals change weekly.",
-      "Scan your bills to track spending patterns.",
-      "Check expiring deals before they're gone.",
+      "Scan your bills to track spending patterns over time.",
+      "Check expiring deals before they disappear.",
       "Buy lentils and rice in bulk for maximum savings.",
-      "Set a monthly budget goal in Expenses.",
+      "Use the Expenses page to spot your biggest spending categories.",
+      "Add items to cart before shopping to stay on budget.",
     ];
-    setAiTip(tips[new Date().getDay() % tips.length]);
+    setTip(tips[new Date().getDay() % tips.length]);
   }
 
   const spendDiff = thisMonthSpent - lastMonthSpent;
   const spendPct = lastMonthSpent > 0 ? Math.abs(Math.round((spendDiff/lastMonthSpent)*100)) : 0;
-  const savingGoal = 150;
-  const savingPct = Math.min(100, Math.round((thisMonthSaved/savingGoal)*100));
+  const isNewUser = !loadingStats && totalBills === 0;
   const level = getLevel(user?.points||0);
 
   return (
@@ -126,8 +119,8 @@ export default function HomePage() {
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20}}>
             {[
               {l:"Cart",v:cartCount,i:"🛒",c:"var(--gold)",h:"/cart"},
-              {l:"Low Stock",v:lowStockItems.length,i:"⚠️",c:"var(--red)",h:"/stock"},
-              {l:"Expiring",v:expiringCount,i:"⏰",c:"var(--gold)",h:"/deals"},
+              {l:"Bills",v:totalBills,i:"🧾",c:"var(--text)",h:"/expenses"},
+              {l:"Expiring",v:expiringCount,i:"⏰",c:"var(--red)",h:"/deals"},
             ].map(s=>(
               <div key={s.l} onClick={()=>router.push(s.h)} style={{background:"var(--surf)",borderRadius:16,padding:"16px 10px",textAlign:"center",cursor:"pointer",boxShadow:"var(--shadow)"}}>
                 <div style={{fontSize:24,marginBottom:6}}>{s.i}</div>
@@ -137,65 +130,70 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* AI Tip */}
+          {/* Empty state for new users */}
+          {isNewUser&&(
+            <div style={{background:"linear-gradient(135deg,rgba(255,159,10,0.08),rgba(255,159,10,0.02))",border:"1px solid rgba(255,159,10,0.25)",borderRadius:16,padding:"20px 18px",marginBottom:20,textAlign:"center"}}>
+              <div style={{fontSize:36,marginBottom:10}}>👋</div>
+              <div style={{fontSize:16,fontWeight:700,color:"var(--text)",marginBottom:6}}>Welcome to KNOWBOTH.AI</div>
+              <div style={{fontSize:13,color:"var(--text2)",marginBottom:16,lineHeight:1.6}}>Start by scanning your first bill or checking out the latest deals near you.</div>
+              <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap" as const}}>
+                <button onClick={()=>router.push("/scan")} style={{padding:"10px 20px",background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>🧾 Scan First Bill</button>
+                <button onClick={()=>router.push("/deals")} style={{padding:"10px 20px",background:"var(--surf)",border:"1px solid var(--border)",borderRadius:12,fontSize:13,fontWeight:600,color:"var(--text)",cursor:"pointer"}}>🏷️ Browse Deals</button>
+              </div>
+            </div>
+          )}
+
+          {/* Daily Tip */}
           <div style={{background:"linear-gradient(135deg,rgba(255,159,10,0.08),rgba(255,159,10,0.02))",border:"1px solid rgba(255,159,10,0.2)",borderRadius:14,padding:"14px 16px",marginBottom:20}}>
-            <div style={{fontSize:11,fontWeight:600,color:"var(--gold)",letterSpacing:0.5,textTransform:"uppercase" as const,marginBottom:6}}>🤖 AI Smart Tip</div>
-            <div style={{fontSize:13,color:"var(--text)",lineHeight:1.6}}>{aiTip}</div>
-            <button onClick={generateTip} style={{background:"none",border:"none",color:"var(--gold)",fontSize:11,fontWeight:600,cursor:"pointer",marginTop:6,padding:0}}>🔄 New tip</button>
+            <div style={{fontSize:11,fontWeight:600,color:"var(--gold)",letterSpacing:0.5,textTransform:"uppercase" as const,marginBottom:6}}>💡 Daily Tip</div>
+            <div style={{fontSize:13,color:"var(--text)",lineHeight:1.6}}>{tip}</div>
+            <button onClick={rotateTip} style={{background:"none",border:"none",color:"var(--gold)",fontSize:11,fontWeight:600,cursor:"pointer",marginTop:6,padding:0}}>🔄 Next tip</button>
           </div>
 
           {/* This Month */}
-          <div style={{background:"var(--surf)",borderRadius:16,padding:"18px",marginBottom:20,boxShadow:"var(--shadow)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-              <div>
-                <div style={{fontSize:12,fontWeight:600,color:"var(--text3)",letterSpacing:0.5,textTransform:"uppercase" as const}}>💰 This Month</div>
-                <div style={{fontSize:28,fontWeight:700,color:"var(--gold)",marginTop:6,letterSpacing:-0.8}}>
-                  {loadingStats?"Loading...":fmt(thisMonthSpent)} spent
+          {!isNewUser&&(
+            <div style={{background:"var(--surf)",borderRadius:16,padding:"18px",marginBottom:20,boxShadow:"var(--shadow)"}}>
+              <div style={{fontSize:12,fontWeight:600,color:"var(--text3)",letterSpacing:0.5,textTransform:"uppercase" as const,marginBottom:10}}>💰 This Month</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12}}>
+                <div style={{fontSize:28,fontWeight:700,color:"var(--gold)",letterSpacing:-0.8}}>
+                  {loadingStats?"—":fmt(thisMonthSpent)}
                 </div>
-              </div>
-              <div style={{textAlign:"right"}}>
                 {!loadingStats&&lastMonthSpent>0&&(
-                  <>
-                    <div style={{fontSize:12,fontWeight:600,color:spendDiff<=0?"var(--green)":"var(--red)"}}>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:13,fontWeight:600,color:spendDiff<=0?"var(--green)":"var(--red)"}}>
                       {spendDiff<=0?"↓":"↑"} {spendPct}% vs last month
                     </div>
                     <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{fmt(lastMonthSpent)} last month</div>
-                  </>
-                )}
-                {thisMonthSaved>0&&(
-                  <>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                      <span style={{fontSize:12,color:"var(--green)",fontWeight:600}}>✦ {fmt(thisMonthSaved)} saved from deals</span>
-                      <span style={{fontSize:11,color:"var(--text3)"}}>{savingPct}% of {fmt(savingGoal)} goal</span>
-                    </div>
-                    <div style={{height:6,background:"var(--bg)",borderRadius:3,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${savingPct}%`,background:"linear-gradient(90deg,#30D158,#25A244)",borderRadius:3}}/>
-                    </div>
-                  </>
+                  </div>
                 )}
               </div>
+              {!loadingStats&&lastMonthSpent>0&&spendDiff<0&&(
+                <div style={{padding:"8px 12px",background:"rgba(48,209,88,0.08)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:10,fontSize:12,color:"var(--green)",fontWeight:600,marginBottom:12}}>
+                  ✦ You're spending {fmt(Math.abs(spendDiff))} less than last month
+                </div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:12,color:"var(--text2)"}}><span style={{fontWeight:700,color:"var(--text)"}}>{totalBills}</span> bills scanned</div>
+                <button onClick={()=>router.push("/expenses")} style={{background:"none",border:"none",color:"var(--gold)",fontSize:12,fontWeight:600,cursor:"pointer",padding:0}}>View all →</button>
+              </div>
             </div>
-            <div style={{display:"flex",gap:16,marginTop:12}}>
-              <div style={{fontSize:12,color:"var(--text2)"}}><span style={{fontWeight:700,color:"var(--text)"}}>{totalBills}</span> total bills scanned</div>
-              <button onClick={()=>router.push("/expenses")} style={{background:"none",border:"none",color:"var(--gold)",fontSize:12,fontWeight:600,cursor:"pointer",padding:0}}>View all →</button>
-            </div>
-          </div>
+          )}
 
-          {/* Low Stock */}
-          {lowStockItems.length>0&&(
+          {/* Recent Purchases (from latest bill) */}
+          {recentItems.length>0&&(
             <div style={{marginBottom:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>⚠️ Low Stock</div>
+                <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>🛍️ Last Bill — {recentItems[0]?.store}</div>
                 <button onClick={()=>router.push("/stock")} style={{background:"none",border:"none",fontSize:13,color:"var(--gold)",cursor:"pointer",fontWeight:600}}>View all →</button>
               </div>
               <div style={{background:"var(--surf)",borderRadius:14,overflow:"hidden",boxShadow:"var(--shadow)"}}>
-                {lowStockItems.map((item:any,i:number)=>(
-                  <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:i<lowStockItems.length-1?"0.5px solid var(--border2)":"none"}}>
+                {recentItems.map((item:any,i:number)=>(
+                  <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:i<recentItems.length-1?"0.5px solid var(--border2)":"none"}}>
                     <div style={{flex:1}}>
                       <div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>{item.name}</div>
-                      <div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>{item.store}</div>
+                      <div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>{item.category}</div>
                     </div>
-                    <span style={{background:"rgba(255,59,48,0.1)",color:"var(--red)",borderRadius:20,padding:"3px 9px",fontSize:11,fontWeight:600}}>{item.quantity} left</span>
+                    <span style={{background:"var(--bg)",color:"var(--text2)",borderRadius:20,padding:"3px 9px",fontSize:11,fontWeight:600}}>qty {item.quantity}</span>
                   </div>
                 ))}
               </div>
