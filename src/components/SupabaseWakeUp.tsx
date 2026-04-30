@@ -10,7 +10,7 @@ export function SupabaseWakeUp() {
       toastId = toast.loading("Connecting to server...", { duration: 300000 });
     }, 4000);
 
-    supabase.from("brands").select("id").limit(1).then(() => {
+    Promise.resolve(supabase.from("brands").select("id").limit(1)).then(() => {
       clearTimeout(timer);
       if (toastId) toast.dismiss(toastId);
     }).catch(() => {
