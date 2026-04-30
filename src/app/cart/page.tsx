@@ -125,11 +125,11 @@ export default function CartPage() {
                 </div>
                 <div style={{background:"var(--surf)",borderRadius:14,overflow:"hidden",boxShadow:"var(--shadow)"}}>
                   {items.map((item,i)=>(
-                    <div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:i<items.length-1?"0.5px solid var(--border2)":"none",opacity:item.purchased?0.5:1,transition:"opacity 0.2s"}}>
+                    <div key={item.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"12px 16px",borderBottom:i<items.length-1?"0.5px solid var(--border2)":"none",opacity:item.purchased?0.5:1,transition:"opacity 0.2s"}}>
 
                       {/* Mark as purchased */}
                       <button onClick={()=>togglePurchased(item.id)}
-                        style={{width:26,height:26,borderRadius:8,border:`2px solid ${item.purchased?"var(--green)":"var(--border)"}`,background:item.purchased?"var(--green)":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}>
+                        style={{width:26,height:26,marginTop:2,borderRadius:8,border:`2px solid ${item.purchased?"var(--green)":"var(--border)"}`,background:item.purchased?"var(--green)":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}>
                         {item.purchased&&<span style={{color:"#fff",fontSize:13,fontWeight:700}}>✓</span>}
                       </button>
 
@@ -137,35 +137,36 @@ export default function CartPage() {
                         {CAT_ICONS[item.category]||"📦"}
                       </div>
 
+                      {/* Name + category + action buttons */}
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:14,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textDecoration:item.purchased?"line-through":"none"}}>{item.name}</div>
-                        <div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>{item.category} · {item.unit}</div>
-                      </div>
-
-                      {/* Qty */}
-                      <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                        <button onClick={()=>updateQty(item.id,item.qty-1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-                        <span style={{fontSize:13,fontWeight:700,color:"var(--text)",minWidth:18,textAlign:"center"}}>{item.qty}</span>
-                        <button onClick={()=>updateQty(item.id,item.qty+1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
-                      </div>
-
-                      {/* Price + actions */}
-                      <div style={{textAlign:"right",flexShrink:0}}>
-                        <div style={{fontSize:14,fontWeight:700,color:"var(--gold)"}}>{fmt((item.price||0)*item.qty)}</div>
-                        {item.qty>1&&<div style={{fontSize:10,color:"var(--text3)"}}>{fmt(item.price)}/ea</div>}
-                        <div style={{display:"flex",gap:4,marginTop:4,justifyContent:"flex-end"}}>
+                        <div style={{fontSize:14,fontWeight:600,color:"var(--text)",wordBreak:"break-word",lineHeight:1.3,textDecoration:item.purchased?"line-through":"none"}}>{item.name}</div>
+                        <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{item.category} · {item.unit}</div>
+                        <div style={{display:"flex",gap:4,marginTop:7,flexWrap:"wrap"}}>
                           <button onClick={()=>{moveToPantry(item);toast.success(`${item.name} moved to stock`);}}
                             title="Move to Stock"
-                            style={{background:"rgba(48,209,88,0.1)",border:"none",borderRadius:6,padding:"3px 7px",fontSize:10,fontWeight:700,color:"var(--green)",cursor:"pointer"}}>
+                            style={{background:"rgba(48,209,88,0.1)",border:"none",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,color:"var(--green)",cursor:"pointer"}}>
                             📦 Stock
                           </button>
                           <button onClick={()=>logAsExpense(item)}
                             title="Log as Expense"
-                            style={{background:"rgba(10,132,255,0.1)",border:"none",borderRadius:6,padding:"3px 7px",fontSize:10,fontWeight:700,color:"var(--blue)",cursor:"pointer"}}>
+                            style={{background:"rgba(10,132,255,0.1)",border:"none",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,color:"var(--blue)",cursor:"pointer"}}>
                             💸 Expense
                           </button>
                           <button onClick={()=>{removeFromCart(item.id);toast(`${item.name} removed`);}}
-                            style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:15,padding:"2px 4px"}}>✕</button>
+                            style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:14,padding:"2px 4px",lineHeight:1}}>✕</button>
+                        </div>
+                      </div>
+
+                      {/* Qty + price stacked on the right */}
+                      <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <button onClick={()=>updateQty(item.id,item.qty-1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                          <span style={{fontSize:13,fontWeight:700,color:"var(--text)",minWidth:18,textAlign:"center"}}>{item.qty}</span>
+                          <button onClick={()=>updateQty(item.id,item.qty+1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:14,fontWeight:700,color:"var(--gold)"}}>{fmt((item.price||0)*item.qty)}</div>
+                          {item.qty>1&&<div style={{fontSize:10,color:"var(--text3)"}}>{fmt(item.price)}/ea</div>}
                         </div>
                       </div>
                     </div>

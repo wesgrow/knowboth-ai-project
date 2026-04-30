@@ -144,10 +144,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Either image (b64+mime) or URL is required" }, { status: 400 });
     }
 
-    content.push({ type: "text", text: `Extract the store info and ALL deal items from this grocery flyer${storeName ? ` (store: ${storeName})` : ""}.
+    content.push({ type: "text", text: `Extract the store info, sale dates, and ALL deal items from this grocery flyer${storeName ? ` (store: ${storeName})` : ""}.
 
 Return ONLY valid JSON, no markdown, no backticks:
-{"store_name":"Patel Brothers","store_locations":[{"address":"2610 Patriot Blvd","city":"Glenview","state":"IL","zip":"60026","phone":""}],"items":[{"name":"Toor Dal 4lb","normalized_name":"toor dal 4lb","price":4.99,"regular_price":6.99,"unit":"bag","category":"Lentils & Dals","notes":""}]}
+{"store_name":"Patel Brothers","sale_start":"2026-04-30","sale_end":"2026-05-06","store_locations":[{"address":"2610 Patriot Blvd","city":"Glenview","state":"IL","zip":"60026","phone":""}],"items":[{"name":"Toor Dal 4lb","normalized_name":"toor dal 4lb","price":4.99,"regular_price":6.99,"unit":"bag","category":"Lentils & Dals","notes":""}]}
 
 Category must be exactly one of: Vegetables, Fruits, Dairy, Rice & Grains, Lentils & Dals, Spices, Snacks, Beverages, Oils & Ghee, Frozen, Bakery, Meat & Fish, Household, Other.
 
@@ -156,6 +156,11 @@ Store rules:
 - store_locations: list ALL branch addresses shown anywhere in the flyer (footer, "valid at:" section, address blocks, store list).
   Each: {"address":"street or ''","city":"","state":"2-letter or ''","zip":"5-digit or ''","phone":"or ''"}
   Return [] if no specific branch addresses are listed.
+
+Date rules:
+- sale_start: deal start date in YYYY-MM-DD format. Look for "Effective", "Valid from", "Sale starts", or a date range at the top/bottom of the flyer. Use "" if not found.
+- sale_end: deal end date in YYYY-MM-DD format. Look for "Valid thru", "Expires", "Through", "Until", or the end of a date range. Use "" if not found.
+- If only one date is shown (e.g. "Valid 5/6"), treat it as sale_end.
 
 Item rules:
 - name = full product name with brand and size. Expand all abbreviations.
@@ -183,7 +188,18 @@ Item rules:
 
     const store_name = String(parsed.store_name || "").trim().slice(0, 200);
     const store_locations = sanitizeLocations(parsed.store_locations);
-    return NextResponse.json({ store_name, store_locations, items });
+
+    // Validate and normalize extracted dates
+    function toYMD(s: any): string {
+      if (!s || typeof s !== "string") return "";
+      const d = new Date(s.trim());
+      if (isNaN(d.getTime())) return "";
+      return d.toISOString().split("T")[0];
+    }
+    const sale_start = toYMD(parsed.sale_start);
+    const sale_end   = toYMD(parsed.sale_end);
+
+    return NextResponse.json({ store_name, store_locations, items, sale_start, sale_end });
 
   } catch (e: any) {
     console.error("Extract API error:", e);

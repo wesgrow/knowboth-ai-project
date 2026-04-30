@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, supabaseAuth } from "@/lib/supabase";
+import { BottomSheet } from "@/ui";
 import toast from "react-hot-toast";
 
 const CATS = ["Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household","Other"];
@@ -186,27 +187,29 @@ export default function PostDealPage() {
     const name = newBrandName.trim();
     if (!name) { toast.error("Enter store name"); return; }
     setAddingBrand(true);
-    const slug = toSlug(name);
-    const payload: any = { name, slug };
-    if (newBrandWebsite.trim()) payload.website = newBrandWebsite.trim();
-    if (newBrandPhone.trim()) payload.phone = newBrandPhone.trim();
-    const { data, error } = await supabase.from("brands").insert(payload).select("id,name,slug").single();
-    if (error) {
-      console.error("createBrand error:", error);
-      if (error.code==="23505") toast.error("A store with that name already exists");
-      else toast.error(`Could not create store: ${error.message}`);
-      setAddingBrand(false); return;
+    try {
+      const slug = toSlug(name);
+      const { data, error } = await supabase.from("brands").insert({ name, slug }).select("id,name,slug").maybeSingle();
+      if (error) {
+        if (error.code === "23505") toast.error("A store with that name already exists");
+        else toast.error(`Could not create store: ${error.message}`);
+        return;
+      }
+      if (!data) { toast.error("Store creation failed — check permissions"); return; }
+      await fetchBrands();
+      setSelectedBrand(data);
+      setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
+      toast.success(`✦ ${name} added`);
+      if (pendingExtractedLocs.length > 0) {
+        await matchAndApplyLocations(data.id, data.name, pendingExtractedLocs, []);
+      } else {
+        await fetchLocations(data.id);
+      }
+    } catch(e: any) {
+      toast.error(e.message || "Failed to create store");
+    } finally {
+      setAddingBrand(false);
     }
-    await fetchBrands();
-    setSelectedBrand(data);
-    setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
-    toast.success(`✦ ${name} added`);
-    if (pendingExtractedLocs.length > 0) {
-      await matchAndApplyLocations(data.id, data.name, pendingExtractedLocs, []);
-    } else {
-      await fetchLocations(data.id);
-    }
-    setAddingBrand(false);
   }
 
   async function createLocation() {
@@ -276,9 +279,10 @@ export default function PostDealPage() {
           const res = await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
           const data = await res.json();
           if(data.error) { toast.error(`File ${i+1}: ${data.error}`); continue; }
-          if(i===0 && data.store_name) {
-            setExtractedStoreName(data.store_name);
-            await autoMatchStore(data.store_name, data.store_locations||[]);
+          if(i===0) {
+            if(data.store_name) { setExtractedStoreName(data.store_name); await autoMatchStore(data.store_name, data.store_locations||[]); }
+            if(data.sale_start) setSaleStart(data.sale_start);
+            if(data.sale_end)   setSaleEnd(data.sale_end);
           }
           const extracted = (data.items||[]).map((item:any,idx:number)=>{
             const raw = {
@@ -304,10 +308,9 @@ export default function PostDealPage() {
         const res = await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
         const data = await res.json();
         if(data.error) throw new Error(data.error);
-        if(data.store_name) {
-          setExtractedStoreName(data.store_name);
-          await autoMatchStore(data.store_name, data.store_locations||[]);
-        }
+        if(data.store_name) { setExtractedStoreName(data.store_name); await autoMatchStore(data.store_name, data.store_locations||[]); }
+        if(data.sale_start) setSaleStart(data.sale_start);
+        if(data.sale_end)   setSaleEnd(data.sale_end);
         allItems.push(...(data.items||[]).map((item:any,idx:number)=>{
           const raw = {
             id:`url-item${idx}-${Date.now()}`,
@@ -668,7 +671,7 @@ export default function PostDealPage() {
                 )}
                 {/* Store dropdown */}
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6}}>SELECT STORE</div>
-                <div style={{display:"flex",gap:6,marginBottom:showAddBrand?0:14}}>
+                <div style={{display:"flex",gap:6,marginBottom:14}}>
                   <select
                     value={selectedBrand?.id||""}
                     onChange={e=>{const b=brands.find(b=>b.id===e.target.value)||null;setSelectedBrand(b);setSelectedLocs([]);setPendingExtractedLocs([]);if(b)fetchLocations(b.id);else setLocations([]);}}
@@ -676,35 +679,11 @@ export default function PostDealPage() {
                     <option value="">— Select store —</option>
                     {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
-                  <button onClick={()=>{setShowAddBrand(v=>!v);setNewBrandName("");}}
+                  <button onClick={()=>{setShowAddBrand(true);setNewBrandName("");}}
                     style={{padding:"11px 14px",background:"rgba(255,159,10,0.1)",border:"none",borderRadius:10,fontSize:13,fontWeight:600,color:"#FF9F0A",cursor:"pointer",whiteSpace:"nowrap" as const}}>
                     + New
                   </button>
                 </div>
-                {showAddBrand&&(
-                  <div style={{padding:"14px",background:"rgba(255,159,10,0.05)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,marginBottom:14,marginTop:8}}>
-                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:8}}>NEW STORE</div>
-                    <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
-                      <input value={newBrandName} onChange={e=>setNewBrandName(e.target.value)} autoFocus
-                        placeholder="Store name *"
-                        style={{background:"var(--surf)",border:"1px solid rgba(255,159,10,0.4)",borderRadius:9,padding:"9px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
-                      <input value={newBrandWebsite} onChange={e=>setNewBrandWebsite(e.target.value)}
-                        placeholder="Website (optional)"
-                        style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"9px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
-                      <input value={newBrandPhone} onChange={e=>setNewBrandPhone(e.target.value)}
-                        placeholder="Phone (optional)"
-                        style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"9px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
-                      <div style={{display:"flex",gap:6}}>
-                        <button onClick={createBrand} disabled={addingBrand||!newBrandName.trim()}
-                          style={{flex:2,padding:"9px",background:"#FF9F0A",border:"none",borderRadius:9,fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",opacity:!newBrandName.trim()?0.5:1}}>
-                          {addingBrand?"Adding...":"Add Store"}
-                        </button>
-                        <button onClick={()=>setShowAddBrand(false)}
-                          style={{flex:1,padding:"9px",background:"var(--bg)",border:"none",borderRadius:9,fontSize:13,color:"var(--text2)",cursor:"pointer"}}>Cancel</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
                 {selectedBrand&&(
                   <>
                     <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6}}>VALID AT</div>
@@ -810,11 +789,17 @@ export default function PostDealPage() {
                 )}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
                   <div>
-                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6}}>SALE STARTS</div>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6,display:"flex",alignItems:"center",gap:5}}>
+                      SALE STARTS
+                      {saleStart&&extractedStoreName&&<span style={{fontSize:9,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",borderRadius:20,padding:"1px 6px"}}>🤖 auto</span>}
+                    </div>
                     <input type="date" style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={saleStart} onChange={e=>setSaleStart(e.target.value)}/>
                   </div>
                   <div>
-                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6}}>SALE ENDS</div>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6,display:"flex",alignItems:"center",gap:5}}>
+                      SALE ENDS
+                      {saleEnd&&extractedStoreName&&<span style={{fontSize:9,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",borderRadius:20,padding:"1px 6px"}}>🤖 auto</span>}
+                    </div>
                     <input type="date" style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={saleEnd} onChange={e=>setSaleEnd(e.target.value)}/>
                   </div>
                 </div>
@@ -924,6 +909,30 @@ export default function PostDealPage() {
           </div>
         </div>
       </div>
+
+      <BottomSheet open={showAddBrand} onClose={()=>setShowAddBrand(false)} label="Add New Store">
+        <div style={{display:"flex",flexDirection:"column",gap:12,padding:"4px 0 8px"}}>
+          <input value={newBrandName} onChange={e=>setNewBrandName(e.target.value)} autoFocus
+            placeholder="Store name *"
+            style={{background:"var(--bg)",border:"1px solid rgba(255,159,10,0.4)",borderRadius:10,padding:"12px 14px",fontSize:16,color:"var(--text)",outline:"none"}}/>
+          <input value={newBrandWebsite} onChange={e=>setNewBrandWebsite(e.target.value)}
+            placeholder="Website (optional)"
+            style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px",fontSize:16,color:"var(--text)",outline:"none"}}/>
+          <input value={newBrandPhone} onChange={e=>setNewBrandPhone(e.target.value)}
+            placeholder="Phone (optional)"
+            style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px",fontSize:16,color:"var(--text)",outline:"none"}}/>
+          <div style={{display:"flex",gap:8,marginTop:4}}>
+            <button onClick={()=>setShowAddBrand(false)}
+              style={{flex:1,padding:"12px",background:"var(--bg)",border:"none",borderRadius:10,fontSize:14,fontWeight:600,color:"var(--text2)",cursor:"pointer"}}>
+              Cancel
+            </button>
+            <button onClick={createBrand} disabled={addingBrand||!newBrandName.trim()}
+              style={{flex:2,padding:"12px",background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:10,fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",opacity:!newBrandName.trim()?0.5:1,boxShadow:"0 2px 8px rgba(255,159,10,0.3)"}}>
+              {addingBrand?"Adding...":"Add Store"}
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
     </>
   );
 }
