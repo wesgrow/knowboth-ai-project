@@ -9,8 +9,7 @@
     "lint": "next lint",
     "test": "jest --passWithNoTests",
     "test:a11y": "jest src/__tests__/a11y --passWithNoTests",
-    "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "storybook": "echo 'Install storybook separately when next@13-15 is used'"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
@@ -24,10 +23,6 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
-    "@storybook/addon-a11y": "^8.0.0",
-    "@storybook/addon-essentials": "^8.0.0",
-    "@storybook/nextjs": "^8.0.0",
-    "@storybook/react": "^8.0.0",
     "@testing-library/jest-dom": "^6.0.0",
     "@testing-library/react": "^14.0.0",
     "@types/jest": "^29.0.0",
