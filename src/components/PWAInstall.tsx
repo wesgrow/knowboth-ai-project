@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 
 export function PWAInstall() {
   const [prompt, setPrompt] = useState<any>(null);
@@ -55,7 +56,7 @@ export function PWAInstall() {
       boxShadow: "0 4px 24px rgba(0,0,0,0.15)",
       display: "flex", alignItems: "center", gap: 12,
     }}>
-      <div style={{ fontSize: 36, flexShrink: 0 }}>✦</div>
+      <Image src="/icons/icon-192.png" alt="KNOWBOTH.AI" width={48} height={48} style={{ borderRadius: 12, flexShrink: 0 }} />
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>
           Install KNOWBOTH.AI

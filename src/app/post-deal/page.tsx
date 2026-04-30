@@ -93,6 +93,9 @@ export default function PostDealPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(()=>{ fetchBrands(); },[]);
+  useEffect(()=>{
+    if(step==="store" && extractedStoreName && !selectedBrand) setShowAddBrand(true);
+  },[step]);
 
   async function fetchBrands() {
     const{data}=await supabase.from("brands").select("id,name,slug").order("name");
@@ -157,7 +160,6 @@ export default function PostDealPage() {
       if (storedLocs.length > 0) await matchAndApplyLocations(match.id, match.name, storedLocs, dbLocs);
     } else {
       setNewBrandName(storeName);
-      setShowAddBrand(true);
       if (storedLocs.length > 0) setPendingExtractedLocs(storedLocs);
     }
   }
@@ -740,63 +742,24 @@ export default function PostDealPage() {
                         )}
                       </div>
                     )}
-                    {locationMode==="specific"&&(showAddLoc?(
-                      <div style={{padding:"14px",background:"rgba(255,159,10,0.05)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:12,marginBottom:12}}>
-                        <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:8}}>NEW LOCATION</div>
-                        <div style={{display:"flex",flexDirection:"column" as const,gap:7}}>
-                          <input value={newLocBranch} onChange={e=>setNewLocBranch(e.target.value)} placeholder="Branch name (optional)" autoFocus
-                            style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
-                          <input value={newLocAddress} onChange={e=>setNewLocAddress(e.target.value)} placeholder="Street address"
-                            style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
-                          <div style={{display:"flex",gap:6}}>
-                            <input value={newLocCity} onChange={e=>setNewLocCity(e.target.value)} placeholder="City *"
-                              style={{flex:2,background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
-                            <input value={newLocState} onChange={e=>setNewLocState(e.target.value.toUpperCase().slice(0,2))} placeholder="ST" maxLength={2}
-                              style={{width:48,background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 8px",fontSize:16,color:"var(--text)",outline:"none",textAlign:"center" as const}}/>
-                            <input value={newLocZip} onChange={e=>setNewLocZip(e.target.value.replace(/\D/g,"").slice(0,5))} placeholder="ZIP" maxLength={5}
-                              style={{width:72,background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 10px",fontSize:16,color:"var(--text)",outline:"none"}}/>
-                          </div>
-                          <input value={newLocPhone} onChange={e=>setNewLocPhone(e.target.value)} placeholder="Phone (optional)"
-                            style={{background:"var(--surf)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 12px",fontSize:16,color:"var(--text)",outline:"none"}}/>
-                          <button onClick={lookupLocation} disabled={lookingUpLoc}
-                            style={{width:"100%",padding:"9px",background:"rgba(10,132,255,0.08)",border:"1px solid rgba(10,132,255,0.2)",borderRadius:9,fontSize:12,fontWeight:600,color:"#0A84FF",cursor:"pointer"}}>
-                            {lookingUpLoc?"🔍 Looking up...":"📍 Auto-fill from address / zip"}
-                          </button>
-                          {newLocMapLink&&(
-                            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"rgba(48,209,88,0.06)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:9}}>
-                              <span>🗺️</span>
-                              <a href={newLocMapLink} target="_blank" rel="noreferrer" style={{flex:1,fontSize:12,color:"#30D158",fontWeight:600,textDecoration:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>View on Google Maps ↗</a>
-                              {newLocLat&&<span style={{fontSize:10,color:"var(--text3)",flexShrink:0}}>{newLocLat.toFixed(4)}, {newLocLng?.toFixed(4)}</span>}
-                            </div>
-                          )}
-                          <div style={{display:"flex",gap:6}}>
-                            <button onClick={createLocation} disabled={addingLoc||!newLocCity.trim()}
-                              style={{flex:2,padding:"9px",background:"#FF9F0A",border:"none",borderRadius:9,fontSize:13,fontWeight:600,color:"#fff",cursor:"pointer",opacity:!newLocCity.trim()?0.5:1}}>
-                              {addingLoc?"Saving...":"Save Location"}
-                            </button>
-                            <button onClick={()=>setShowAddLoc(false)}
-                              style={{flex:1,padding:"9px",background:"var(--bg)",border:"none",borderRadius:9,fontSize:13,color:"var(--text2)",cursor:"pointer"}}>Cancel</button>
-                          </div>
-                        </div>
-                      </div>
-                    ):(
+                    {locationMode==="specific"&&(
                       <button onClick={()=>setShowAddLoc(true)}
                         style={{width:"100%",padding:"10px 14px",background:"rgba(255,159,10,0.04)",border:"1.5px dashed rgba(255,159,10,0.3)",borderRadius:10,fontSize:12,fontWeight:600,color:"#FF9F0A",cursor:"pointer",textAlign:"left" as const,marginBottom:12}}>
                         + Add New Location
                       </button>
-                    ))}
+                    )}
                   </>
                 )}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
                   <div>
-                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6,display:"flex",alignItems:"center",gap:5}}>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6,display:"flex",alignItems:"center",flexWrap:"wrap",gap:4}}>
                       SALE STARTS
                       {saleStart&&extractedStoreName&&<span style={{fontSize:9,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",borderRadius:20,padding:"1px 6px"}}>🤖 auto</span>}
                     </div>
                     <input type="date" style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={saleStart} onChange={e=>setSaleStart(e.target.value)}/>
                   </div>
                   <div>
-                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6,display:"flex",alignItems:"center",gap:5}}>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:0.6,color:"var(--text3)",marginBottom:6,display:"flex",alignItems:"center",flexWrap:"wrap",gap:4}}>
                       SALE ENDS
                       {saleEnd&&extractedStoreName&&<span style={{fontSize:9,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",borderRadius:20,padding:"1px 6px"}}>🤖 auto</span>}
                     </div>
@@ -909,6 +872,49 @@ export default function PostDealPage() {
           </div>
         </div>
       </div>
+
+      <BottomSheet open={showAddLoc} onClose={()=>setShowAddLoc(false)} label="Add New Location">
+        <div style={{display:"flex",flexDirection:"column",gap:10,padding:"4px 0 8px"}}>
+          <input value={newLocBranch} onChange={e=>setNewLocBranch(e.target.value)} autoFocus
+            placeholder="Branch name (optional)"
+            style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px",fontSize:16,color:"var(--text)",outline:"none"}}/>
+          <input value={newLocAddress} onChange={e=>setNewLocAddress(e.target.value)}
+            placeholder="Street address"
+            style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px",fontSize:16,color:"var(--text)",outline:"none"}}/>
+          <div style={{display:"flex",gap:8}}>
+            <input value={newLocCity} onChange={e=>setNewLocCity(e.target.value)} placeholder="City *"
+              style={{flex:1,background:"var(--bg)",border:"1px solid rgba(255,159,10,0.4)",borderRadius:10,padding:"12px 14px",fontSize:16,color:"var(--text)",outline:"none"}}/>
+            <input value={newLocState} onChange={e=>setNewLocState(e.target.value.toUpperCase().slice(0,2))} placeholder="ST" maxLength={2}
+              style={{width:56,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 8px",fontSize:16,color:"var(--text)",outline:"none",textAlign:"center" as const}}/>
+            <input value={newLocZip} onChange={e=>setNewLocZip(e.target.value.replace(/\D/g,"").slice(0,5))} placeholder="ZIP" maxLength={5}
+              style={{width:84,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 10px",fontSize:16,color:"var(--text)",outline:"none"}}/>
+          </div>
+          <input value={newLocPhone} onChange={e=>setNewLocPhone(e.target.value)}
+            placeholder="Phone (optional)"
+            style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px",fontSize:16,color:"var(--text)",outline:"none"}}/>
+          <button onClick={lookupLocation} disabled={lookingUpLoc}
+            style={{width:"100%",padding:"11px",background:"rgba(10,132,255,0.08)",border:"1px solid rgba(10,132,255,0.2)",borderRadius:10,fontSize:13,fontWeight:600,color:"#0A84FF",cursor:"pointer"}}>
+            {lookingUpLoc?"🔍 Looking up...":"📍 Auto-fill from address / zip"}
+          </button>
+          {newLocMapLink&&(
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:"rgba(48,209,88,0.06)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:10}}>
+              <span>🗺️</span>
+              <a href={newLocMapLink} target="_blank" rel="noreferrer" style={{flex:1,fontSize:12,color:"#30D158",fontWeight:600,textDecoration:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>View on Google Maps ↗</a>
+              {newLocLat&&<span style={{fontSize:10,color:"var(--text3)",flexShrink:0}}>{newLocLat.toFixed(4)}, {newLocLng?.toFixed(4)}</span>}
+            </div>
+          )}
+          <div style={{display:"flex",gap:8,marginTop:4}}>
+            <button onClick={()=>setShowAddLoc(false)}
+              style={{flex:1,padding:"12px",background:"var(--bg)",border:"none",borderRadius:10,fontSize:14,fontWeight:600,color:"var(--text2)",cursor:"pointer"}}>
+              Cancel
+            </button>
+            <button onClick={createLocation} disabled={addingLoc||!newLocCity.trim()}
+              style={{flex:2,padding:"12px",background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:10,fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",opacity:!newLocCity.trim()?0.5:1,boxShadow:"0 2px 8px rgba(255,159,10,0.3)"}}>
+              {addingLoc?"Saving...":"Save Location"}
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
 
       <BottomSheet open={showAddBrand} onClose={()=>setShowAddBrand(false)} label="Add New Store">
         <div style={{display:"flex",flexDirection:"column",gap:12,padding:"4px 0 8px"}}>
