@@ -267,7 +267,13 @@ export default function StockPage() {
                         </div>
                         <div style={{display:"flex",flexDirection:"column" as const,gap:5,flexShrink:0}}>
                           <button onClick={()=>{setRestockItem(item);setRestockQty(1);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:9,padding:"7px 12px",fontSize:11,fontWeight:700,color:"#fff",cursor:"pointer",whiteSpace:"nowrap" as const,boxShadow:"0 2px 6px rgba(255,159,10,0.3)"}}>🔄 Restock</button>
-                          <button onClick={()=>{if(window.confirm(`Remove ${item.name} from stock?`)){setStockItems(prev=>prev.filter(i=>i.id!==item.id));toast.success(`${item.name} removed`);}}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,background:"rgba(255,59,48,0.08)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:9,padding:"7px 12px",fontSize:11,fontWeight:700,color:"#FF3B30",cursor:"pointer",whiteSpace:"nowrap" as const}}>✕ Remove</button>
+                          <button onClick={async()=>{
+                            if(!window.confirm(`Remove ${item.name} from stock?`))return;
+                            setStockItems(prev=>prev.filter(i=>i.id!==item.id));
+                            const{error}=await supabase.from("expense_items").delete().eq("id",item.id);
+                            if(error){toast.error("Failed to remove");fetchData();}
+                            else toast.success(`${item.name} removed`);
+                          }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,background:"rgba(255,59,48,0.08)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:9,padding:"7px 12px",fontSize:11,fontWeight:700,color:"#FF3B30",cursor:"pointer",whiteSpace:"nowrap" as const}}>✕ Remove</button>
                         </div>
                       </div>
                     ))}
