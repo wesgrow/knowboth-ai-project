@@ -155,11 +155,6 @@ export default function AuthPage() {
         By continuing, you agree to our Terms & Privacy Policy
       </div>
 
-      <style>{`
-        @keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-        .fade-up{animation:fadeInUp 0.4s ease both}
-        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}}
-      `}</style>
     </div>
   );
 }

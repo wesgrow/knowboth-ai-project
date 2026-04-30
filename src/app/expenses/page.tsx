@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { supabase, supabaseAuth } from "@/lib/supabase";
+import { AddExpenseForm } from "@/components/AddExpenseForm";
 import toast from "react-hot-toast";
 
 const CAT_ICONS: Record<string, string> = {
@@ -71,6 +72,7 @@ export default function ExpensesPage() {
   const [expandedItems, setExpandedItems] = useState<Record<string, ExpenseItem[]>>({});
   const [loadingItems, setLoadingItems] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
   const currency = user?.currency || "USD";
 
   const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
@@ -206,12 +208,16 @@ export default function ExpensesPage() {
             <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--text)", letterSpacing: -0.8 }}>Expenses</h1>
             <p style={{ fontSize: 13, color: "var(--text2)", marginTop: 3 }}>Track every bill · Scan to add</p>
           </div>
-          <button
-            onClick={() => router.push("/scan")}
-            style={{ background: "linear-gradient(135deg,#FF9F0A,#D4800A)", color: "#fff", border: "none", borderRadius: 14, padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(255,159,10,0.3)" }}
-          >
-            🧾 Scan Bill
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setShowAddForm(true)}
+              style={{ background: "var(--surf)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              + Add
+            </button>
+            <button onClick={() => router.push("/scan")}
+              style={{ background: "linear-gradient(135deg,#FF9F0A,#D4800A)", color: "#fff", border: "none", borderRadius: 14, padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(255,159,10,0.3)" }}>
+              🧾 Scan Bill
+            </button>
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 16 }}>
@@ -387,15 +393,7 @@ export default function ExpensesPage() {
         )}
 
       </div>
-
-      <style>{`
-        @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
-        .fade-up{animation:fadeInUp 0.35s ease both}
-        .skel{background:linear-gradient(90deg,var(--border2) 25%,var(--surf) 50%,var(--border2) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear;border-radius:8px;}
-        @media(hover:none){button:hover{opacity:1!important;transform:none!important}}
-        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}.skel{animation:none!important}}
-      `}</style>
+      {showAddForm && <AddExpenseForm onClose={() => setShowAddForm(false)} onSaved={fetchExpenses} />}
     </div>
   );
 }

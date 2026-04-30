@@ -252,11 +252,8 @@ export default function ChatPage() {
         </div>
 
         <style>{`
-          @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
           @keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}
           @keyframes micPulse{0%,100%{box-shadow:0 0 0 3px rgba(255,59,48,0.25)}50%{box-shadow:0 0 0 6px rgba(255,59,48,0.1)}}
-          .fade-up{animation:fadeInUp 0.35s ease both}
-          @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}}
         `}</style>
       </div>
     </>

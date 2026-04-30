@@ -23,13 +23,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
       </head>
       <body>
-        <ThemeProvider/>
-        <AuthSync/>
-        <Navbar/>
-        <div className="main-content">
-          {children}
-        </div>
-        <ChatWidget/>
+        <ThemeProvider>
+          <AuthSync/>
+          <Navbar/>
+          <div className="main-content">
+            {children}
+          </div>
+          <ChatWidget/>
         <Toaster
           position="top-right"
           toastOptions={{
@@ -45,6 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             },
           }}
         />
+        </ThemeProvider>
       </body>
     </html>
   );

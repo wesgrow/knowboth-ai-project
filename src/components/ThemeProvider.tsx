@@ -1,10 +1,33 @@
 "use client";
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
-export function ThemeProvider() {
+type Theme = "light"|"dark";
+interface ThemeCtx { theme: Theme; toggle: () => void; setTheme: (t: Theme) => void; }
+
+const Ctx = createContext<ThemeCtx>({ theme:"dark", toggle:()=>{}, setTheme:()=>{} });
+
+export function useTheme() { return useContext(Ctx); }
+
+export function ThemeProvider({ children }: { children?: ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>("dark");
+
   useEffect(() => {
-    const saved = localStorage.getItem("kb-theme") || "light";
-    document.documentElement.setAttribute("data-theme", saved);
+    const stored = localStorage.getItem("kb-theme") as Theme|null;
+    const preferred = window.matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light";
+    const initial = stored || preferred;
+    setThemeState(initial);
+    document.documentElement.setAttribute("data-theme", initial);
   }, []);
-  return null;
+
+  function setTheme(t: Theme) {
+    setThemeState(t);
+    document.documentElement.setAttribute("data-theme", t);
+    localStorage.setItem("kb-theme", t);
+  }
+
+  return (
+    <Ctx.Provider value={{ theme, toggle:()=>setTheme(theme==="dark"?"light":"dark"), setTheme }}>
+      {children}
+    </Ctx.Provider>
+  );
 }

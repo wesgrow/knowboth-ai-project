@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { STORE_COLORS } from "@/lib/utils";
+import { supabase, supabaseAuth } from "@/lib/supabase";
+import { AddCartItemForm } from "@/components/AddCartItemForm";
 import toast from "react-hot-toast";
 
 const CAT_ICONS: Record<string,string> = {
@@ -16,8 +18,42 @@ export default function CartPage() {
   const router = useRouter();
   const { cart, removeFromCart, updateQty, clearCart, togglePurchased, moveToPantry, user } = useAppStore();
   const [showSummary, setShowSummary] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
   const currency = user?.currency || "USD";
   const fmt = (n: number) => new Intl.NumberFormat("en-US",{style:"currency",currency}).format(n);
+
+  async function logAsExpense(item: ReturnType<typeof useAppStore.getState>["cart"][0]) {
+    try {
+      const { data: { session } } = await supabaseAuth.auth.getSession();
+      if (!session) return toast.error("Sign in required");
+      const { data: exp, error: e1 } = await supabase.from("expenses").insert({
+        user_id: session.user.id,
+        store_name: item.store || "Unknown",
+        store_city: "",
+        brand_id: item.store_id || null,
+        purchase_date: new Date().toISOString().split("T")[0],
+        currency,
+        total: (item.price || 0) * item.qty,
+        items_count: 1,
+        source: "manual",
+      }).select("id").single();
+      if (e1) throw e1;
+      const { error: e2 } = await supabase.from("expense_items").insert({
+        expense_id: exp.id,
+        name: item.name,
+        price: item.price || 0,
+        quantity: item.qty,
+        unit: item.unit || "ea",
+        category: item.category,
+        notes: item.notes || null,
+      });
+      if (e2) throw e2;
+      removeFromCart(item.id);
+      toast.success(`${item.name} logged as expense`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed");
+    }
+  }
 
   const groups: Record<string,any[]> = {};
   cart.forEach(item => {
@@ -46,12 +82,18 @@ export default function CartPage() {
               <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>My Cart</h1>
               <p style={{fontSize:13,color:"var(--text2)",marginTop:3}}>{itemCount} items · {storeCount} store{storeCount!==1?"s":""}</p>
             </div>
-            {cart.length>0&&(
-              <button onClick={()=>{if(window.confirm("Clear all items?"))clearCart();}}
-                style={{background:"rgba(255,59,48,0.08)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:600,color:"var(--red)",cursor:"pointer"}}>
-                Clear All
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <button onClick={()=>setShowAddForm(true)}
+                style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,padding:"9px 14px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+                + Add Item
               </button>
-            )}
+              {cart.length>0&&(
+                <button onClick={()=>{if(window.confirm("Clear all items?"))clearCart();}}
+                  style={{background:"rgba(255,59,48,0.08)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:600,color:"var(--red)",cursor:"pointer"}}>
+                  Clear All
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Empty state */}
@@ -117,6 +159,11 @@ export default function CartPage() {
                             style={{background:"rgba(48,209,88,0.1)",border:"none",borderRadius:6,padding:"3px 7px",fontSize:10,fontWeight:700,color:"var(--green)",cursor:"pointer"}}>
                             📦 Stock
                           </button>
+                          <button onClick={()=>logAsExpense(item)}
+                            title="Log as Expense"
+                            style={{background:"rgba(10,132,255,0.1)",border:"none",borderRadius:6,padding:"3px 7px",fontSize:10,fontWeight:700,color:"var(--blue)",cursor:"pointer"}}>
+                            💸 Expense
+                          </button>
                           <button onClick={()=>{removeFromCart(item.id);toast(`${item.name} removed`);}}
                             style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:15,padding:"2px 4px"}}>✕</button>
                         </div>
@@ -178,13 +225,7 @@ export default function CartPage() {
           )}
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-        .fade-up{animation:fadeInUp 0.35s ease both}
-        @media(hover:none){button:hover{opacity:1!important;transform:none!important}}
-        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}}
-      `}</style>
+      {showAddForm && <AddCartItemForm onClose={() => setShowAddForm(false)} />}
     </>
   );
 }

@@ -1,0 +1,2 @@
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE expense_items ADD COLUMN IF NOT EXISTS notes TEXT;

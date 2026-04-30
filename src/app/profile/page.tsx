@@ -279,14 +279,6 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <style>{`
-        @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
-        .fade-up{animation:fadeInUp 0.35s ease both}
-        .skel{background:linear-gradient(90deg,var(--border2) 25%,var(--surf) 50%,var(--border2) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear;border-radius:8px;}
-        @media(hover:none){button:hover{opacity:1!important;transform:none!important}}
-        @media(prefers-reduced-motion:reduce){.fade-up{animation:none!important;opacity:1!important}.skel{animation:none!important}}
-      `}</style>
     </>
   );
 }

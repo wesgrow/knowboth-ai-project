@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-interface CartItem { id:string;name:string;price:number;unit:string;store:string;store_slug?:string;category:string;icon:string;qty:number;purchased:boolean; }
+interface CartItem { id:string;name:string;price:number;unit:string;store:string;store_slug?:string;store_id?:string;category:string;icon:string;qty:number;purchased:boolean;notes?:string;manually_added?:boolean; }
+export type { CartItem };
 interface PantryItem { id:string;name:string;price:number;unit:string;store:string;category:string;icon:string;qty:number;purchaseDate:string; }
 interface User { name:string;avatar:string;zip:string;city:string;currency:string;theme:"dark"|"light"|"auto";points:number; }
 
@@ -12,6 +13,7 @@ interface AppStore {
   updateRadius:(r:number)=>void;
   updateTheme:(t:"dark"|"light"|"auto")=>void;
   addToCart:(item:Omit<CartItem,"qty"|"purchased">)=>void;
+  addCartItemManual:(item:{name:string;store:string;store_id?:string;price:number;qty:number;category:string;notes?:string})=>void;
   removeFromCart:(id:string)=>void;
   updateQty:(id:string,qty:number)=>void;
   togglePurchased:(id:string)=>void;
@@ -30,6 +32,7 @@ export const useAppStore = create<AppStore>()(persist((set,get)=>({
   updateRadius:(r)=>set({radius:r}),
   updateTheme:(t)=>set(s=>({user:s.user?{...s.user,theme:t}:null})),
   addToCart:(item)=>{const{cart}=get();if(cart.find(i=>i.id===item.id))return;set({cart:[...cart,{...item,qty:1,purchased:false}]});},
+  addCartItemManual:(item)=>{const id=`m_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;set(s=>({cart:[...s.cart,{id,name:item.name,price:item.price,unit:"ea",store:item.store,store_slug:"",store_id:item.store_id,category:item.category,icon:"🛒",qty:item.qty,purchased:false,notes:item.notes,manually_added:true}]}));},
   removeFromCart:(id)=>set(s=>({cart:s.cart.filter(i=>i.id!==id)})),
   updateQty:(id,qty)=>set(s=>({cart:s.cart.map(i=>i.id===id?{...i,qty:Math.max(1,qty)}:i)})),
   togglePurchased:(id)=>set(s=>({cart:s.cart.map(i=>i.id===id?{...i,purchased:!i.purchased}:i)})),

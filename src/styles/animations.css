@@ -1,0 +1,279 @@
+/* ── KNOWBOTH ANIMATION SYSTEM ── */
+/* Claude Design: calm, minimal, warm — purposeful motion only */
+
+/* ── KEYFRAMES ── */
+
+@keyframes kb-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes kb-fade-up {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes kb-fade-down {
+  from { opacity: 0; transform: translate3d(0, -10px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes kb-fade-left {
+  from { opacity: 0; transform: translate3d(14px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes kb-fade-right {
+  from { opacity: 0; transform: translate3d(-14px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes kb-slide-up {
+  from { opacity: 0; transform: translate3d(0, 32px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes kb-slide-down {
+  from { opacity: 0; transform: translate3d(0, -32px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes kb-slide-left {
+  from { opacity: 0; transform: translate3d(48px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes kb-slide-right {
+  from { opacity: 0; transform: translate3d(-48px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes kb-scale-in {
+  from { opacity: 0; transform: scale3d(0.95, 0.95, 1); }
+  to   { opacity: 1; transform: scale3d(1, 1, 1); }
+}
+
+@keyframes kb-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+/* ── ANIMATION CLASSES (respect reduced-motion by default) ── */
+
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in {
+    animation: kb-fade-in 0.3s ease both;
+    will-change: opacity;
+  }
+  .fade-up {
+    animation: kb-fade-up 0.35s ease both;
+    will-change: transform, opacity;
+  }
+  .fade-down {
+    animation: kb-fade-down 0.35s ease both;
+    will-change: transform, opacity;
+  }
+  .fade-left {
+    animation: kb-fade-left 0.35s ease both;
+    will-change: transform, opacity;
+  }
+  .fade-right {
+    animation: kb-fade-right 0.35s ease both;
+    will-change: transform, opacity;
+  }
+  .slide-up {
+    animation: kb-slide-up 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+  .slide-down {
+    animation: kb-slide-down 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+  .slide-left {
+    animation: kb-slide-left 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+  .slide-right {
+    animation: kb-slide-right 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+  .scale-in {
+    animation: kb-scale-in 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+
+  /* Shorter distances on small screens */
+  @media (max-width: 480px) {
+    @keyframes kb-fade-up {
+      from { opacity: 0; transform: translate3d(0, 7px, 0); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    @keyframes kb-fade-down {
+      from { opacity: 0; transform: translate3d(0, -7px, 0); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    @keyframes kb-slide-up {
+      from { opacity: 0; transform: translate3d(0, 20px, 0); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    @keyframes kb-slide-left {
+      from { opacity: 0; transform: translate3d(28px, 0, 0); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    @keyframes kb-slide-right {
+      from { opacity: 0; transform: translate3d(-28px, 0, 0); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+  }
+}
+
+/* Visible by default when motion is disabled — no flash of invisible content */
+.fade-in, .fade-up, .fade-down, .fade-left, .fade-right,
+.slide-up, .slide-down, .slide-left, .slide-right, .scale-in {
+  opacity: 1;
+}
+
+/* ── STAGGER DELAYS ── */
+
+.delay-1 { animation-delay:  80ms; }
+.delay-2 { animation-delay: 160ms; }
+.delay-3 { animation-delay: 240ms; }
+.delay-4 { animation-delay: 320ms; }
+.delay-5 { animation-delay: 400ms; }
+.delay-6 { animation-delay: 480ms; }
+
+/* ── SKELETON SHIMMER ── */
+
+.skel {
+  background: linear-gradient(
+    90deg,
+    var(--bg)  25%,
+    var(--bg3) 50%,
+    var(--bg)  75%
+  );
+  background-size: 800px 100%;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skel { animation: kb-shimmer 1.4s infinite; }
+}
+
+/* ── TRANSITIONS ── */
+
+.transition-fast {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+.transition-base {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 250ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+.transition-slow {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 400ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── HOVER EFFECTS (pointer devices only) ── */
+
+@media (hover: hover) and (pointer: fine) {
+  .hover-lift {
+    transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1),
+                box-shadow 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .hover-lift:hover {
+    transform: translate3d(0, -2px, 0);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
+  }
+  .hover-lift-strong {
+    transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1),
+                box-shadow 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .hover-lift-strong:hover {
+    transform: translate3d(0, -4px, 0);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.13);
+  }
+  .hover-glow {
+    transition: box-shadow 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .hover-glow:hover {
+    box-shadow: 0 0 0 3px rgba(255, 159, 10, 0.22), 0 4px 16px rgba(255, 159, 10, 0.16);
+  }
+  .hover-dim {
+    transition: opacity 150ms ease;
+  }
+  .hover-dim:hover { opacity: 0.72; }
+}
+
+/* ── TOUCH: cancel hover states on non-pointer devices ── */
+
+@media (hover: none) {
+  .hover-lift:hover,
+  .hover-lift-strong:hover { transform: none; box-shadow: none; }
+  .hover-glow:hover { box-shadow: none; }
+  .hover-dim:hover  { opacity: 1; }
+  button:hover { opacity: 1 !important; transform: none !important; }
+}
+
+/* ── REDUCED MOTION SAFETY NET ── */
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in, .fade-up, .fade-down, .fade-left, .fade-right,
+  .slide-up, .slide-down, .slide-left, .slide-right, .scale-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .skel { animation: none !important; }
+  .transition-fast, .transition-base, .transition-slow {
+    transition-duration: 0.01ms !important;
+  }
+  .hover-lift, .hover-lift-strong {
+    transition: none !important;
+  }
+  .hover-lift:hover, .hover-lift-strong:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* ── GPU ISOLATION ── */
+/* Apply to containers that hold animated children to create a stacking context */
+.gpu-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* ── BUTTON BASE (shared across pages) ── */
+
+.btn-gold {
+  background: linear-gradient(135deg, #FF9F0A, #D4800A);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-gold:hover { opacity: 0.88; }
+}
+.btn-gold:active { transform: scale(0.97); }
+
+.btn-ghost {
+  background: var(--surf2, var(--bg));
+  color: var(--text2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 150ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-ghost:hover { background: var(--bg3, var(--bg)); }
+}
