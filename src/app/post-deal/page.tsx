@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase, supabaseAuth } from "@/lib/supabase";
+import { supabase, supabaseAuth, timedRetry } from "@/lib/supabase";
 import { BottomSheet } from "@/ui";
 import toast from "react-hot-toast";
 
@@ -191,13 +191,9 @@ export default function PostDealPage() {
     setAddingBrand(true);
     try {
       const slug = toSlug(name);
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Request timed out — check your connection and try again")), 12000)
+      const { data, error } = await timedRetry(() =>
+        supabase.from("brands").insert({ name, slug }).select("id,name,slug").maybeSingle()
       );
-      const { data, error } = await Promise.race([
-        supabase.from("brands").insert({ name, slug }).select("id,name,slug").maybeSingle(),
-        timeout,
-      ]);
       if (error) {
         if (error.code === "23505") toast.error("A store with that name already exists");
         else toast.error(`Could not create store: ${error.message}`);

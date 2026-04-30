@@ -5,6 +5,7 @@ import { PWAInstall } from "@/components/PWAInstall";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Navbar } from "@/components/Navbar";
 import { ChatWidget } from "@/components/ChatWidget";
+import { SupabaseWakeUp } from "@/components/SupabaseWakeUp";
 import { Toaster } from "react-hot-toast";
 
 export const viewport = { themeColor: "#FF9F0A" };
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider>
           <AuthSync/>
+          <SupabaseWakeUp/>
           <PWAInstall/>
           <Navbar/>
           <div className="main-content">

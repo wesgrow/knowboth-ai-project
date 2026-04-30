@@ -2,8 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
-import { supabase } from "@/lib/supabase";
-import { supabaseAuth } from "@/lib/supabase";
+import { supabase, supabaseAuth, timedRetry } from "@/lib/supabase";
 import { BottomSheet } from "@/ui";
 import toast from "react-hot-toast";
 
@@ -166,13 +165,9 @@ export default function ScanPage() {
     if (!name) { toast.error("Enter store name"); return; }
     setAddingBrand(true);
     try {
-      const timeout = new Promise<never>((_,reject) =>
-        setTimeout(() => reject(new Error("Request timed out — check your connection")), 12000)
+      const { data, error } = await timedRetry(() =>
+        supabase.from("brands").insert({ name, slug:toSlug(name) }).select("id,name,slug").maybeSingle()
       );
-      const { data, error } = await Promise.race([
-        supabase.from("brands").insert({ name, slug:toSlug(name) }).select("id,name,slug").maybeSingle(),
-        timeout,
-      ]);
       if (error) { toast.error(error.code==="23505"?"Store already exists":`Error: ${error.message}`); return; }
       if (!data) { toast.error("Store creation failed — check permissions"); return; }
       setLinkedBrand(data); setLinkedLocation(null);
@@ -267,13 +262,6 @@ export default function ScanPage() {
   async function saveBill(force=false) {
     setSaving(true);
     try {
-      const timed = <T>(p: Promise<T>): Promise<T> => Promise.race([
-        p,
-        new Promise<never>((_,reject) =>
-          setTimeout(() => reject(new Error("Request timed out — check your connection and try again")), 12000)
-        ),
-      ]);
-
       const {data:{session}} = await supabaseAuth.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) throw new Error("You must be signed in to save a bill");
@@ -283,19 +271,19 @@ export default function ScanPage() {
       const total = manualTotal || items.reduce((s,i)=>s+i.actual_price,0);
 
       if (!force) {
-        const {data:existingBills} = await timed(
+        const {data:existingBills} = await timedRetry(() =>
           supabase.from("expenses").select("id,bill_number,total")
             .eq("user_id",userId).eq("store_name",storeName).eq("purchase_date",purchaseDate)
         );
         if (existingBills&&existingBills.length>0) {
-          const byBillNum = billNumber ? existingBills.find(b=>b.bill_number&&b.bill_number===billNumber) : null;
-          const byTotal = existingBills.find(b=>Math.abs((b.total||0)-total)<0.01);
+          const byBillNum = billNumber ? existingBills.find((b:any)=>b.bill_number&&b.bill_number===billNumber) : null;
+          const byTotal = existingBills.find((b:any)=>Math.abs((b.total||0)-total)<0.01);
           const match = byBillNum||byTotal;
           if (match) { setDupWarn({matchedOn:byBillNum?"bill number":"store, date & total"}); return; }
         }
       }
 
-      const {data:expRows, error:expErr} = await timed(
+      const {data:expRows, error:expErr} = await timedRetry(() =>
         supabase.from("expenses").insert({
           user_id:userId, store_name:storeName,
           store_city:result.store_city||"", store_zip:result.store_zip||"",
@@ -307,8 +295,8 @@ export default function ScanPage() {
       const expense = expRows?.[0];
 
       if (expense?.id) {
-        const {error:itemsErr} = await timed(
-          supabase.from("expense_items").insert(items.map(i=>({
+        const {error:itemsErr} = await timedRetry(() =>
+          supabase.from("expense_items").insert(items.map((i:any)=>({
             expense_id:expense.id, name:i.name, price:i.actual_price,
             quantity:i.quantity, unit:i.unit, category:i.category,
           })))
