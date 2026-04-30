@@ -23,6 +23,7 @@ export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [maximized, setMaximized] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: `Hi ${user?.name?.split(" ")[0] || "there"}! 👋 Ask me about prices, deals or your spending.` },
@@ -52,6 +53,7 @@ export function ChatWidget() {
     setMicSupported(!!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition));
     setTtsSupported("speechSynthesis" in window);
     if (!localStorage.getItem("kb_chat_notice")) setShowAiNotice(true);
+    if (localStorage.getItem("kb_chat_hidden") === "1") setHidden(true);
     fetchDeals();
   }, []);
 
@@ -185,7 +187,23 @@ export function ChatWidget() {
     setLoading(false);
   }
 
+  function hideWidget() {
+    setHidden(true); setOpen(false);
+    localStorage.setItem("kb_chat_hidden", "1");
+  }
+  function restoreWidget() {
+    setHidden(false);
+    localStorage.removeItem("kb_chat_hidden");
+  }
+
   if (!pos) return null;
+
+  if (hidden) return (
+    <button onClick={restoreWidget}
+      style={{ position:"fixed", bottom:72, right:0, zIndex:9999, background:"var(--surf)", border:"1px solid var(--border)", borderRight:"none", borderRadius:"20px 0 0 20px", padding:"7px 12px 7px 14px", fontSize:11, fontWeight:700, color:"var(--text2)", cursor:"pointer", boxShadow:"-2px 2px 10px rgba(0,0,0,0.10)", display:"flex", alignItems:"center", gap:5 }}>
+      ✦ AI
+    </button>
+  );
 
   const W = maximized ? W_MAX : W_NORMAL;
   const H = maximized ? H_MAX : H_NORMAL;
@@ -253,12 +271,19 @@ export function ChatWidget() {
                   {maximized ? "⊡" : "⊞"}
                 </button>
               )}
-              {/* Close */}
+              {/* Close panel */}
               <button
                 onClick={e => { e.stopPropagation(); setOpen(false); setMinimized(false); setMaximized(false); }}
-                title="Close"
+                title="Close chat"
                 style={btnStyle()}>
                 ✕
+              </button>
+              {/* Hide widget completely */}
+              <button
+                onClick={e => { e.stopPropagation(); hideWidget(); }}
+                title="Hide AI widget"
+                style={{ ...btnStyle(), marginLeft: 2, borderLeft: "1px solid var(--border)", paddingLeft: 6, color: "var(--text3)" }}>
+                ⊗
               </button>
             </div>
           </div>

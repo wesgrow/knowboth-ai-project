@@ -31,7 +31,7 @@ const STORE_COLORS: Record<string,string> = {
 
 export default function CommunityPage() {
   const router = useRouter();
-  const { user, addToCart, cart } = useAppStore();
+  const { user } = useAppStore();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState<Record<string,string>>({});
@@ -120,17 +120,6 @@ export default function CommunityPage() {
     setDeals(prev=>prev.map(d=>d.id===dealId?{...d,comments:d.comments+1}:d));
     loadComments(dealId);
     toast.success("Comment posted!");
-  }
-
-  function addAllToCart(deal: Deal) {
-    let added = 0;
-    deal.items.forEach(item=>{
-      if (!cart.find(c=>c.id===item.id)) {
-        addToCart({id:item.id,name:item.name,price:item.price,unit:item.unit||"ea",store:deal.brand.name,store_slug:deal.brand.slug,category:item.category||"Other",icon:"🛒"});
-        added++;
-      }
-    });
-    toast.success(`✦ ${added} items added from ${deal.brand.name}`);
   }
 
   function daysLeft(saleEnd: string|null) {
@@ -254,7 +243,7 @@ export default function CommunityPage() {
                   📤 Share
                 </button>
                 <div style={{flex:1}}/>
-                <Button size="sm" onClick={()=>addAllToCart(deal)} style={{borderRadius:20,boxShadow:"0 2px 6px rgba(255,159,10,.3)"}}>🛒 Add All</Button>
+                <Button size="sm" onClick={()=>router.push(`/deals?deal_id=${deal.id}`)} style={{borderRadius:20,boxShadow:"0 2px 6px rgba(255,159,10,.3)"}}>🏷️ See Deals</Button>
               </div>
 
               {/* Comments */}

@@ -124,7 +124,7 @@ export default function HomePage() {
         }
         @media(prefers-reduced-motion:reduce){.expiring-pulse{animation:none!important}}
       `}</style>
-
+      
       {/* Hero */}
       <div className="fade-up" style={{marginBottom:24}}>
         <div style={{fontSize:28,fontWeight:800,color:"var(--text)",letterSpacing:-0.8,lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
@@ -137,12 +137,24 @@ export default function HomePage() {
           <span style={{width:3,height:3,borderRadius:"50%",background:"var(--text3)"}}/>
           <span style={{fontSize:13,color:"var(--text2)"}}>📍 {user?.city||"DFW"}</span>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-          <Button size="sm" onClick={()=>router.push("/scan")} full>🧾 Scan</Button>
-          <Button size="sm" variant="ghost" onClick={()=>router.push("/deals")} full>🏷️ Deals</Button>
-          <Button size="sm" variant="ghost" onClick={()=>router.push("/post-deal")} full>📷 Post</Button>
+        {/* Quick actions */}
+      <div className="fade-up" style={{animationDelay:"0.28s",marginBottom:24}}>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--text)",marginBottom:10}}>⚡ Quick Actions</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
+          {[
+            {l:"Scan Bill",      i:"🧾", h:"/scan",      c:"#FF9F0A"},
+            {l:"Post Deal",      i:"📷", h:"/post-deal", c:"#30D158"},
+            {l:"Compare Prices", i:"⚖️", h:"/deals",     c:"#0A84FF"},
+            {l:"View Expenses",  i:"📊", h:"/expenses",  c:"#FF9F0A"},
+          ].map(a=>(
+            <button key={a.l} className="action-btn" onClick={()=>router.push(a.h)} aria-label={a.l}>
+              <div style={{width:42,height:42,borderRadius:12,background:`${a.c}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{a.i}</div>
+              <span style={{fontSize:14,fontWeight:600,color:"var(--text)",textAlign:"left"}}>{a.l}</span>
+            </button>
+          ))}
         </div>
       </div>
+     </div>
 
       {/* Quick stats */}
       <div className="fade-up" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:24,animationDelay:"0.06s"}}>
@@ -304,23 +316,6 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Quick actions */}
-      <div className="fade-up" style={{animationDelay:"0.28s",marginBottom:24}}>
-        <div style={{fontSize:13,fontWeight:700,color:"var(--text)",marginBottom:10}}>⚡ Quick Actions</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
-          {[
-            {l:"Scan Bill",      i:"🧾", h:"/scan",      c:"#FF9F0A"},
-            {l:"Post Deal",      i:"📷", h:"/post-deal", c:"#30D158"},
-            {l:"Compare Prices", i:"⚖️", h:"/deals",     c:"#0A84FF"},
-            {l:"View Expenses",  i:"📊", h:"/expenses",  c:"#FF9F0A"},
-          ].map(a=>(
-            <button key={a.l} className="action-btn" onClick={()=>router.push(a.h)} aria-label={a.l}>
-              <div style={{width:42,height:42,borderRadius:12,background:`${a.c}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{a.i}</div>
-              <span style={{fontSize:14,fontWeight:600,color:"var(--text)",textAlign:"left"}}>{a.l}</span>
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Footer */}
       <footer className="fade-up" style={{animationDelay:"0.32s",borderTop:"1px solid var(--border2)",paddingTop:18,textAlign:"center"}}>

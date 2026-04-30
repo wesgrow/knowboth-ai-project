@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useAppStore } from "@/lib/store";
 import { getFreshness, STORE_COLORS } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { BottomSheet } from "@/ui";
 
 const CATS = ["All","Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household"];
 const SORTS = [{v:"newest",l:"Newest"},{v:"price_asc",l:"Price ↑"},{v:"savings",l:"Savings"},{v:"expiring",l:"Expiring"}];
@@ -12,6 +13,21 @@ const PRICE_ORDER = ["Under $1","$1 – $3","$3 – $10","$10 – $25","Over $25
 const PAGE_SIZE = 40;
 type View = "list"|"table"|"cards";
 type GroupBy = "category"|"store"|"price";
+
+function Sparkline({ data, w=52, h=22 }: { data:number[]; w?:number; h?:number }) {
+  if (data.length < 2) return null;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v,i) => `${Math.round((i/(data.length-1))*w)},${Math.round(h - ((v-min)/range)*(h-4)-2)}`).join(" ");
+  const last = data[data.length-1], first = data[0];
+  const color = last <= first ? "#30D158" : "#FF3B30";
+  return (
+    <svg width={w} height={h} style={{display:"block",flexShrink:0}}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx={pts.split(" ").pop()!.split(",")[0]} cy={pts.split(" ").pop()!.split(",")[1]} r={2.5} fill={color}/>
+    </svg>
+  );
+}
 
 function DealsContent() {
   const params = useSearchParams();
@@ -32,6 +48,25 @@ function DealsContent() {
   const [stores, setStores] = useState<string[]>([]);
   const [phItems, setPhItems] = useState<any[]>([]);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  function toggleGroup(key: string) { setCollapsedGroups(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; }); }
+  const [showLegend, setShowLegend] = useState(false);
+  const [storeSheet, setStoreSheet] = useState<{name:string;branches:any[]}|null>(null);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  async function openStoreSheet(brand: {id?:string;name:string}) {
+    if (!brand?.id) { toast("No branch info available"); return; }
+    setStoreSheet({name:brand.name, branches:[]});
+    setLoadingBranches(true);
+    const { data } = await supabase.from("store_locations").select("id,branch_name,address,city,state,zip,lat,lng,map_link").eq("brand_id",brand.id).order("city");
+    setStoreSheet({name:brand.name, branches:data||[]});
+    setLoadingBranches(false);
+  }
+  function mapUrl(b: any) {
+    if (b.map_link) return b.map_link;
+    if (b.lat && b.lng) return `https://maps.google.com?q=${b.lat},${b.lng}`;
+    const q = encodeURIComponent(`${b.branch_name||""} ${b.address||""} ${b.city||""} ${b.state||""}`.trim());
+    return `https://maps.google.com?q=${q}`;
+  }
   const [page, setPage] = useState(1);
   const { addToCart, cart } = useAppStore();
 
@@ -74,20 +109,39 @@ function DealsContent() {
 
   async function fetchDeals() {
     setLoading(true);
-    const { data: dealRows } = await supabase.from("deals").select("id,sale_end,brand_id").eq("status", "approved");
+    const { data: dealRows } = await supabase.from("deals").select("id,sale_end,brand_id").eq("status","approved");
     if (!dealRows?.length) { setItems([]); setLoading(false); return; }
-    const dealIds = dealRows.map((d: any) => d.id);
-    const brandIds = [...new Set(dealRows.map((d: any) => d.brand_id).filter(Boolean))] as string[];
+    const dealIds  = dealRows.map((d:any) => d.id);
+    const brandIds = [...new Set(dealRows.map((d:any) => d.brand_id).filter(Boolean))] as string[];
+    const since30  = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+
     const { data: brands } = await supabase.from("brands").select("id,name,slug").in("id", brandIds);
-    const { data: dealItems } = await supabase.from("deal_items")
-      .select("id,deal_id,name,normalized_name,price,regular_price,unit,category,savings_pct,created_at,source")
-      .in("deal_id", dealIds).order("created_at", { ascending: false });
+    const { data: dealItems } = await supabase.from("deal_items").select("id,deal_id,name,normalized_name,price,regular_price,unit,category,savings_pct,created_at,source").in("deal_id", dealIds).order("created_at",{ascending:false});
+    const { data: expItems } = await supabase.from("expense_items").select("name,price");
     if (!dealItems) { setLoading(false); return; }
-    const bMap: Record<string, any> = {}; (brands || []).forEach((b: any) => { bMap[b.id] = b; });
-    const dMap: Record<string, any> = {}; dealRows.forEach((d: any) => { dMap[d.id] = d; });
-    const merged = dealItems.map((i: any) => ({ ...i, deal: dMap[i.deal_id], brand: bMap[dMap[i.deal_id]?.brand_id] }));
-    setItems(merged);
-    setStores([...new Set(merged.map((i: any) => i.brand?.name).filter(Boolean))] as string[]);
+
+    const bMap: Record<string,any> = {}; (brands||[]).forEach((b:any) => { bMap[b.id] = b; });
+    const dMap: Record<string,any> = {}; dealRows.forEach((d:any) => { dMap[d.id] = d; });
+    const merged = dealItems.map((i:any) => ({ ...i, deal: dMap[i.deal_id], brand: bMap[dMap[i.deal_id]?.brand_id] }));
+
+    const verifiedSet = new Set((expItems||[]).map((e:any) => `${e.name?.toLowerCase().trim()}|${Number(e.price).toFixed(2)}`));
+    const normalizedNames = [...new Set(merged.map((i:any) => i.normalized_name).filter(Boolean))] as string[];
+
+    // Sparklines — only if we have names
+    const { data: phRows } = normalizedNames.length > 0
+      ? await supabase.from("price_history").select("normalized_name,price,recorded_at").in("normalized_name", normalizedNames).gte("recorded_at", since30).order("recorded_at",{ascending:true})
+      : { data: [] };;
+
+    const sparkMap: Record<string,number[]> = {};
+    (phRows||[]).forEach((r:any) => { if (!sparkMap[r.normalized_name]) sparkMap[r.normalized_name] = []; sparkMap[r.normalized_name].push(Number(r.price)); });
+
+    const withSpark = merged.map((i:any) => ({
+      ...i,
+      verified: verifiedSet.has(`${i.name?.toLowerCase().trim()}|${Number(i.price).toFixed(2)}`),
+      sparkline: sparkMap[i.normalized_name] || [],
+    }));
+    setItems(withSpark);
+    setStores([...new Set(withSpark.map((i: any) => i.brand?.name).filter(Boolean))] as string[]);
     setLoading(false);
   }
 
@@ -98,10 +152,12 @@ function DealsContent() {
   const aF = [cat !== "All" && { l: cat, c: () => setCat("All") }, storeFilter !== "All" && { l: storeFilter, c: () => setStoreFilter("All") }, onSale && { l: "On Sale", c: () => setOnSale(false) }, expiringSoon && { l: "Expiring", c: () => setExpiringSoon(false) }, freshToday && { l: "Fresh", c: () => setFreshToday(false) }, maxPrice < 50 && { l: `<$${maxPrice}`, c: () => setMaxPrice(50) }].filter(Boolean) as { l: string; c: () => void }[];
   function clrAll() { setCat("All"); setStoreFilter("All"); setOnSale(false); setExpiringSoon(false); setFreshToday(false); setMaxPrice(50); }
 
-  const filtered = [...items, ...phItems].filter(item => {
+  const dealIdFilter = params.get("deal_id");
+  const filtered = [...items, ...(dealIdFilter ? [] : phItems)].filter(item => {
     const q = search.toLowerCase();
     const dl = dL(item.deal?.sale_end);
     const fr = getFreshness(item.created_at);
+    if (dealIdFilter && item.deal_id !== dealIdFilter) return false;
     if (q && !item.name?.toLowerCase().includes(q)) return false;
     if (cat !== "All" && item.category !== cat) return false;
     if (storeFilter !== "All" && item.brand?.name !== storeFilter) return false;
@@ -183,6 +239,7 @@ function DealsContent() {
   const S = { padding: "10px 14px", fontSize: 13, fontWeight: 600 as const, color: "#1C1C1E", borderBottom: "0.5px solid #F2F2F7", verticalAlign: "middle" as const };
   const TH = { padding: "9px 14px", fontSize: 11, fontWeight: 600 as const, color: "#AEAEB2", textAlign: "left" as const, letterSpacing: 0.3, textTransform: "uppercase" as const, background: "#F9F9F9", borderBottom: "0.5px solid #F2F2F7", whiteSpace: "nowrap" as const };
   return (
+    <>
     <div style={{ minHeight: "100vh", background: "#F2F2F7" }} className="page-body">
       <style>{`
         @media (max-width: 640px) {
@@ -268,7 +325,18 @@ function DealsContent() {
               </div>
             </div>
 
+            <div style={{background:"rgba(255,159,10,0.06)",border:"1px solid rgba(255,159,10,0.18)",borderRadius:10,padding:"9px 14px",marginBottom:10,fontSize:12,color:"var(--text2)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>📄 Prices scraped from deal flyers — may not always be accurate. Verify at store.</span>
+              <button onClick={()=>setShowLegend(true)} style={{background:"none",border:"none",fontSize:12,fontWeight:700,color:"#FF9F0A",cursor:"pointer",flexShrink:0,marginLeft:8,fontFamily:"inherit"}}>ⓘ What's this?</button>
+            </div>
+
             {/* Active filter chips — only shown when filters are active */}
+            {dealIdFilter && (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,159,10,0.1)",border:"1px solid rgba(255,159,10,0.25)",borderRadius:10,padding:"8px 14px",marginBottom:10}}>
+                <span style={{fontSize:12,fontWeight:600,color:"#FF9F0A"}}>📌 Showing 1 deal's items</span>
+                <button onClick={()=>router.replace("/deals")} style={{fontSize:12,fontWeight:700,color:"#FF9F0A",background:"none",border:"none",cursor:"pointer",padding:0}}>See All Deals ✕</button>
+              </div>
+            )}
             {aF.length > 0 && (
               <div style={{ display:"flex", gap:5, flexWrap:"wrap" as const, marginBottom:10 }}>
                 {aF.map((f,i) => (
@@ -331,10 +399,20 @@ function DealsContent() {
             )}
 
             {/* ── LIST VIEW — Grouped by item with expandable stores ── */}
-            {view === "list" && Object.entries(grouped).map(([category, itemGroups]) => (
+            {view === "list" && Object.entries(grouped).map(([category, itemGroups]) => {
+              const isCollapsed = collapsedGroups.has(category);
+              const itemCount = Object.values(itemGroups).flat().length;
+              return (
               <div key={category} style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#AEAEB2", letterSpacing: 0.5, textTransform: "uppercase" as const, marginBottom: 6, paddingLeft: 2 }}>{category}</div>
-                <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                <button onClick={()=>toggleGroup(category)}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--surf)",border:"1px solid var(--border)",borderRadius:10,cursor:"pointer",padding:"10px 14px",fontFamily:"inherit",boxShadow:"var(--shadow)",marginBottom:6}}>
+                  <span style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{category}</span>
+                    <span style={{fontSize:11,color:"var(--text3)",background:"var(--bg)",borderRadius:20,padding:"2px 8px",fontWeight:600}}>{itemCount}</span>
+                  </span>
+                  <span style={{fontSize:13,color:"var(--text3)",fontWeight:700,transition:"transform .2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▾</span>
+                </button>
+                {!isCollapsed && <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                   {Object.entries(itemGroups).map(([itemKey, storeItems], idx, arr) => {
                     const cheapestItem = storeItems[0];
                     const otherStores = storeItems.slice(1);
@@ -351,9 +429,11 @@ function DealsContent() {
                         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
                           <div style={{ width: 3, height: 40, borderRadius: 2, background: color, flexShrink: 0 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cheapestItem.name}</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {cheapestItem.name}{cheapestItem.verified && <span title="Price verified by community receipt" style={{marginLeft:5,fontSize:12}}>✅</span>}
+                            </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2, flexWrap: "wrap" as const }}>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: "#FF9F0A" }}>🏆 {cheapestItem.brand?.name}</span>
+                              <span onClick={e=>{e.stopPropagation();openStoreSheet(cheapestItem.brand);}} style={{ fontSize: 12, fontWeight: 600, color: "#FF9F0A", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted" }}>🏆 {cheapestItem.brand?.name} 📍</span>
                               <span className={`pill fresh-${fr.level}`} style={{ fontSize: 9, padding: "1px 6px" }}>{fr.label}</span>
                               {sav && <span style={{ fontSize: 9, fontWeight: 600, color: "#30D158" }}>-{sav}%</span>}
                               {dl !== null && dl <= 3 && <span style={{ fontSize: 9, fontWeight: 600, color: "#FF3B30" }}>⏰{dl === 0 ? "Last day" : `${dl}d`}</span>}
@@ -364,6 +444,7 @@ function DealsContent() {
                             <div style={{ fontSize: 17, fontWeight: 700, color: "#FF9F0A" }}>${cheapestItem.price?.toFixed(2)}</div>
                             {cheapestItem.regular_price && <div style={{ fontSize: 10, color: "#AEAEB2", textDecoration: "line-through" }}>${cheapestItem.regular_price?.toFixed(2)}</div>}
                             <div style={{ fontSize: 10, color: "#AEAEB2" }}>/{cheapestItem.unit || "ea"}</div>
+                            {cheapestItem.sparkline?.length >= 2 && <div style={{marginTop:4}}><Sparkline data={cheapestItem.sparkline}/></div>}
                           </div>
                           <button onClick={() => addItem(cheapestItem)} style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, background: inCart ? "#F2F2F7" : "#FF9F0A", color: inCart ? "#AEAEB2" : "#fff" }}>
                             {inCart ? "✓" : "+ Add"}
@@ -406,9 +487,9 @@ function DealsContent() {
                       </div>
                     );
                   })}
-                </div>
+                </div>}
               </div>
-            ))}
+            );})}
 
             {/* ── PAGINATION ── */}
             {totalPages > 1 && (
@@ -593,6 +674,60 @@ function DealsContent() {
             ))}
       </div>
     </div>
+    {/* Store branches sheet */}
+    <BottomSheet open={!!storeSheet} onClose={()=>setStoreSheet(null)} label="Store Branches">
+      {storeSheet&&(
+        <>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <span style={{fontSize:17,fontWeight:800,color:"var(--text)"}}>📍 {storeSheet.name}</span>
+            <button onClick={()=>setStoreSheet(null)} style={{background:"none",border:"none",fontSize:18,color:"var(--text3)",cursor:"pointer"}}>✕</button>
+          </div>
+          <div style={{background:"rgba(255,159,10,0.08)",border:"1px solid rgba(255,159,10,0.2)",borderRadius:10,padding:"9px 14px",marginBottom:14,fontSize:12,color:"var(--text2)"}}>
+            ⚠️ Branch data is scraped from online deal pages. Please double-check hours and address before visiting.
+          </div>
+          {loadingBranches&&<div style={{textAlign:"center",padding:"24px 0",color:"var(--text3)",fontSize:13}}>Loading branches…</div>}
+          {!loadingBranches&&storeSheet.branches.length===0&&<div style={{textAlign:"center",padding:"24px 0",color:"var(--text3)",fontSize:13}}>No branch info available</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {storeSheet.branches.map((b:any)=>(
+              <div key={b.id} style={{background:"var(--bg)",borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700,color:"var(--text)"}}>{b.branch_name||b.city}</div>
+                  <div style={{fontSize:12,color:"var(--text3)",marginTop:3}}>{[b.address,b.city,b.state,b.zip].filter(Boolean).join(", ")}</div>
+                </div>
+                <a href={mapUrl(b)} target="_blank" rel="noreferrer"
+                  style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",borderRadius:10,padding:"8px 12px",fontSize:12,fontWeight:700,textDecoration:"none",flexShrink:0,whiteSpace:"nowrap"}}>
+                  🗺️ Map
+                </a>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </BottomSheet>
+
+    {/* Legend sheet */}
+    <BottomSheet open={showLegend} onClose={()=>setShowLegend(false)} label="Legend">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <span style={{fontSize:17,fontWeight:800,color:"var(--text)"}}>ⓘ What do these mean?</span>
+        <button onClick={()=>setShowLegend(false)} style={{background:"none",border:"none",fontSize:18,color:"var(--text3)",cursor:"pointer"}}>✕</button>
+      </div>
+      {[
+        {b:"✅ Verified",   d:"Price confirmed by a community receipt scan — someone bought it at this price."},
+        {b:"🟢 Fresh Today",d:"Deal posted or updated within the last 24 hours."},
+        {b:"🟡 Good",       d:"Updated 1–3 days ago. Likely still valid."},
+        {b:"🟠 Fair",       d:"Updated 4–7 days ago. Double-check at the store."},
+        {b:"🔴 Stale",      d:"Not updated in over 7 days. May be expired."},
+        {b:"⏰ Xd left",    d:"Deal expires in X days. Act before it ends."},
+        {b:"-X% off",       d:"Savings percentage vs the regular price listed on the flyer."},
+        {b:"📄 Scraped",    d:"Price extracted from a store flyer image. Not manually verified."},
+      ].map(({b,d})=>(
+        <div key={b} style={{display:"flex",gap:12,padding:"11px 0",borderBottom:"0.5px solid var(--border2)"}}>
+          <span style={{fontSize:14,minWidth:110,fontWeight:700,color:"var(--text)",flexShrink:0}}>{b}</span>
+          <span style={{fontSize:13,color:"var(--text2)",lineHeight:1.5}}>{d}</span>
+        </div>
+      ))}
+    </BottomSheet>
+    </>
   );
 }
 

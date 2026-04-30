@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python -c \"from PIL import Image\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(grep -n \"^\\\\s*}\\\\\\)\\)\\\\s*$\\\\|^\\\\s*<\\\\/div>\\\\s*$\" \"c:\\\\Users\\\\Dines\\\\OneDrive\\\\Desktop\\\\My Projects\\\\knowboth-ai-project\\\\src\\\\app\\\\deals\\\\page.tsx\")"
     ]
   }
 }
