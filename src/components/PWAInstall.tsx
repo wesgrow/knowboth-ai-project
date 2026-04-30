@@ -8,15 +8,17 @@ export function PWAInstall() {
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
-    // Check if already installed
+    // Check if already installed or permanently dismissed
     if (window.matchMedia("(display-mode: standalone)").matches) {
       setIsInstalled(true);
       return;
     }
+    if (localStorage.getItem("kb_pwa_dismissed") === "1") return;
 
-    // iOS detection
+    // Skip on iOS and Windows — Android only
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as any).MSStream;
-    setIsIOS(ios);
+    const win = /windows/i.test(navigator.userAgent);
+    if (ios || win) return;
 
     // Android/Chrome install prompt
     const handler = (e: any) => {
@@ -25,9 +27,6 @@ export function PWAInstall() {
       setShow(true);
     };
     window.addEventListener("beforeinstallprompt", handler);
-
-    // Show iOS tip after 3 seconds if on iOS
-    if (ios) setTimeout(() => setShow(true), 3000);
 
     // Register service worker
     if ("serviceWorker" in navigator) {
@@ -42,6 +41,7 @@ export function PWAInstall() {
     prompt.prompt();
     const { outcome } = await prompt.userChoice;
     if (outcome === "accepted") setIsInstalled(true);
+    localStorage.setItem("kb_pwa_dismissed", "1");
     setShow(false);
   }
 
@@ -79,7 +79,7 @@ export function PWAInstall() {
             Install
           </button>
         )}
-        <button onClick={() => setShow(false)} style={{
+        <button onClick={() => { localStorage.setItem("kb_pwa_dismissed","1"); setShow(false); }} style={{
           background: "none", border: "none",
           color: "var(--text-dim)", fontSize: 11, cursor: "pointer",
         }}>
