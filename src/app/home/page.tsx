@@ -140,6 +140,7 @@ export default function HomePage() {
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <Button size="lg" onClick={()=>router.push("/scan")}>🧾 Scan Bill</Button>
           <Button size="lg" variant="ghost" onClick={()=>router.push("/deals")}>🏷️ Browse Deals</Button>
+          <Button size="lg" variant="ghost" onClick={()=>router.push("/post-deal")}>📷 Post Deal</Button>
         </div>
       </div>
 
