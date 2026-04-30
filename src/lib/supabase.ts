@@ -10,9 +10,9 @@ export const supabaseAuth = supabase;
 // On free-tier projects, the first request after inactivity can hang while
 // the DB wakes up. The retry fires after a 3-second pause, by which point
 // Supabase is usually awake and the second attempt succeeds.
-export async function timedRetry<T>(fn: () => Promise<T>, timeoutMs = 12000): Promise<T> {
-  const attempt = () => Promise.race([
-    fn(),
+export async function timedRetry<T>(fn: () => PromiseLike<T>, timeoutMs = 12000): Promise<T> {
+  const attempt = (): Promise<T> => Promise.race([
+    Promise.resolve(fn()),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("__timeout__")), timeoutMs)
     ),
