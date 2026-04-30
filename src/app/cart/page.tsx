@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { STORE_COLORS } from "@/lib/utils";
@@ -19,8 +19,28 @@ export default function CartPage() {
   const { cart, removeFromCart, updateQty, clearCart, togglePurchased, moveToPantry, user } = useAppStore();
   const [showSummary, setShowSummary] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [savingsMap, setSavingsMap] = useState<Record<string, {price:number, store:string}>>({});
   const currency = user?.currency || "USD";
   const fmt = (n: number) => new Intl.NumberFormat("en-US",{style:"currency",currency}).format(n);
+
+  useEffect(() => {
+    const itemsWithPrice = cart.filter(i => (i.price || 0) > 0);
+    if (!itemsWithPrice.length) { setSavingsMap({}); return; }
+    const normNames = [...new Set(itemsWithPrice.map(i =>
+      i.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"")
+    ))];
+    Promise.resolve(
+      supabase.from("price_history").select("normalized_name,store_name,price").in("normalized_name", normNames)
+    ).then(({ data }) => {
+      if (!data) return;
+      const map: Record<string, {price:number, store:string}> = {};
+      for (const row of data) {
+        const ex = map[row.normalized_name];
+        if (!ex || row.price < ex.price) map[row.normalized_name] = { price: row.price, store: row.store_name };
+      }
+      setSavingsMap(map);
+    });
+  }, [cart]);
 
   async function logAsExpense(item: ReturnType<typeof useAppStore.getState>["cart"][0]) {
     try {
@@ -167,6 +187,16 @@ export default function CartPage() {
                         <div style={{textAlign:"right"}}>
                           <div style={{fontSize:14,fontWeight:700,color:"var(--gold)"}}>{fmt((item.price||0)*item.qty)}</div>
                           {item.qty>1&&<div style={{fontSize:10,color:"var(--text3)"}}>{fmt(item.price)}/ea</div>}
+                          {(()=>{
+                            const norm = item.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
+                            const cheaper = savingsMap[norm];
+                            const iStore = (item.store||"").toLowerCase().trim();
+                            const cStore = (cheaper?.store||"").toLowerCase().trim();
+                            if (cheaper && (item.price||0) > 0 && cheaper.price < (item.price||0) && cStore !== iStore) {
+                              return <div style={{fontSize:10,color:"#30D158",fontWeight:700,marginTop:2,whiteSpace:"nowrap"}}>Save {fmt((item.price||0)-cheaper.price)}/ea @ {cheaper.store}</div>;
+                            }
+                            return null;
+                          })()}
                         </div>
                       </div>
                     </div>

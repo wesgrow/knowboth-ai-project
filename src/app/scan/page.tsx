@@ -93,6 +93,7 @@ export default function ScanPage() {
   const [lookingUpLoc, setLookingUpLoc] = useState(false);
   const [addingLoc, setAddingLoc] = useState(false);
   const [autoLinked, setAutoLinked] = useState(false);
+  const [savingsAnalysis, setSavingsAnalysis] = useState<{totalSavingsPossible:number, items:any[]} | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(()=>{
@@ -218,6 +219,7 @@ export default function ScanPage() {
     setResult(null); setSaved(false); setItems([]); setBillNumber(""); setDupWarn(null); setScanError(null);
     setLinkedBrand(null); setLinkedLocation(null); setLocations([]); setAutoLinked(false);
     setNewBrandName(""); setNewLocCity(""); setNewLocZip(""); setShowAddBrand(false); setShowAddLoc(false);
+    setSavingsAnalysis(null);
     setStep("upload");
   }
 
@@ -337,6 +339,32 @@ export default function ScanPage() {
 
       setSaved(true); setStep("confirm");
       toast.success(`✦ +${pts} pts · Bill saved!`);
+
+      // Non-blocking: find cheaper prices at other stores for the saved items
+      const billStoreName = (linkedBrand?.name || result?.store_name || "").toLowerCase().trim();
+      const analysisItems = items.filter(i => i.unit_price > 0 && i.name.trim());
+      if (analysisItems.length > 0) {
+        const normNames = analysisItems.map(i => i.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""));
+        Promise.resolve(
+          supabase.from("price_history").select("normalized_name,store_name,price").in("normalized_name", normNames)
+        ).then(({ data }) => {
+          if (!data || !data.length) return;
+          const cheapestElsewhere: Record<string, {price:number, store:string}> = {};
+          for (const row of data) {
+            if ((row.store_name||"").toLowerCase().trim() === billStoreName) continue;
+            const ex = cheapestElsewhere[row.normalized_name];
+            if (!ex || row.price < ex.price) cheapestElsewhere[row.normalized_name] = { price: row.price, store: row.store_name };
+          }
+          const compared = analysisItems.map(i => {
+            const norm = i.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
+            const cheaper = cheapestElsewhere[norm];
+            if (!cheaper || cheaper.price >= i.unit_price) return null;
+            return { name: i.name, paid: i.unit_price, cheapest_price: cheaper.price, cheapest_store: cheaper.store, savings: (i.unit_price - cheaper.price) * i.quantity };
+          }).filter(Boolean) as any[];
+          const totalSavingsPossible = compared.reduce((s:number, i:any) => s + i.savings, 0);
+          if (totalSavingsPossible > 0) setSavingsAnalysis({ totalSavingsPossible, items: compared });
+        });
+      }
     } catch(e:any) {
       console.error("saveBill error:", e);
       toast.error(e.message||"Failed to save bill");
@@ -756,10 +784,29 @@ export default function ScanPage() {
                   ))}
                 </div>
               </div>
+              {savingsAnalysis && (
+                <div style={{background:"rgba(255,159,10,0.06)",border:"1px solid rgba(255,159,10,0.25)",borderRadius:14,padding:"14px 16px",marginBottom:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>💡 Savings Insight</span>
+                    <span style={{fontSize:14,fontWeight:800,color:"#FF9F0A"}}>Could save ${savingsAnalysis.totalSavingsPossible.toFixed(2)}</span>
+                  </div>
+                  <div style={{fontSize:11,color:"var(--text2)",marginBottom:8}}>Cheaper prices found at other stores:</div>
+                  <div style={{display:"flex",flexDirection:"column" as const,gap:5}}>
+                    {savingsAnalysis.items.slice(0,5).map((i:any) => (
+                      <div key={i.name} style={{display:"flex",alignItems:"center",gap:6,fontSize:11}}>
+                        <span style={{flex:1,color:"var(--text2)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const}}>{i.name}</span>
+                        <span style={{color:"#30D158",fontWeight:700,flexShrink:0}}>−${i.savings.toFixed(2)}</span>
+                        <span style={{color:"var(--text3)",flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,maxWidth:90}}>@ {i.cheapest_store}</span>
+                      </div>
+                    ))}
+                    {savingsAnalysis.items.length > 5 && <div style={{fontSize:11,color:"var(--text3)"}}>+{savingsAnalysis.items.length - 5} more items</div>}
+                  </div>
+                </div>
+              )}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                 <button onClick={()=>router.push("/stock")} style={{padding:"12px 8px",background:"rgba(48,209,88,0.1)",border:"none",borderRadius:12,fontSize:13,fontWeight:600,color:"#30D158",cursor:"pointer"}}>📦 Stock</button>
                 <button onClick={()=>router.push("/expenses")} style={{padding:"12px 8px",background:"rgba(255,159,10,0.1)",border:"none",borderRadius:12,fontSize:13,fontWeight:600,color:"#FF9F0A",cursor:"pointer"}}>📊 Expenses</button>
-                <button onClick={()=>{setStep("upload");setResult(null);setFile(null);setPreview(null);setItems([]);setSaved(false);}} style={{padding:"12px 8px",background:"var(--bg)",border:"none",borderRadius:12,fontSize:13,fontWeight:600,color:"var(--text2)",cursor:"pointer"}}>🧾 Scan More</button>
+                <button onClick={()=>{setStep("upload");setResult(null);setFile(null);setPreview(null);setItems([]);setSaved(false);setSavingsAnalysis(null);}} style={{padding:"12px 8px",background:"var(--bg)",border:"none",borderRadius:12,fontSize:13,fontWeight:600,color:"var(--text2)",cursor:"pointer"}}>🧾 Scan More</button>
               </div>
             </div>
           )}
