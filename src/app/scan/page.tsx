@@ -164,16 +164,26 @@ export default function ScanPage() {
     const name = newBrandName.trim();
     if (!name) { toast.error("Enter store name"); return; }
     setAddingBrand(true);
-    const brandPayload: any = { name, slug:toSlug(name) };
-    if (newBrandWebsite.trim()) brandPayload.website = newBrandWebsite.trim();
-    if (newBrandPhone.trim()) brandPayload.phone = newBrandPhone.trim();
-    const { data, error } = await supabase.from("brands").insert(brandPayload).select("id,name,slug").single();
-    if (error) { console.error("createBrand error:", error); toast.error(error.code==="23505"?"Store already exists":`Error: ${error.message}`); setAddingBrand(false); return; }
-    setBrands(prev=>[...prev,data].sort((a,b)=>a.name.localeCompare(b.name)));
-    setLinkedBrand(data); setLinkedLocation(null); fetchBrandLocations(data.id);
-    setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
-    toast.success(`✦ ${name} added`);
-    setAddingBrand(false);
+    try {
+      const timeout = new Promise<never>((_,reject) =>
+        setTimeout(() => reject(new Error("Request timed out — check your connection")), 12000)
+      );
+      const { data, error } = await Promise.race([
+        supabase.from("brands").insert({ name, slug:toSlug(name) }).select("id,name,slug").maybeSingle(),
+        timeout,
+      ]);
+      if (error) { toast.error(error.code==="23505"?"Store already exists":`Error: ${error.message}`); return; }
+      if (!data) { toast.error("Store creation failed — check permissions"); return; }
+      setLinkedBrand(data); setLinkedLocation(null);
+      setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
+      setAddingBrand(false);
+      toast.success(`✦ ${name} added`);
+      setBrands(prev=>[...prev,data].sort((a,b)=>a.name.localeCompare(b.name)));
+      fetchBrandLocations(data.id);
+    } catch(e:any) {
+      toast.error(e.message||"Failed to add store");
+      setAddingBrand(false);
+    }
   }
 
   async function createLocation() {
@@ -256,6 +266,13 @@ export default function ScanPage() {
   async function saveBill(force=false) {
     setSaving(true);
     try {
+      const timed = <T>(p: Promise<T>): Promise<T> => Promise.race([
+        p,
+        new Promise<never>((_,reject) =>
+          setTimeout(() => reject(new Error("Request timed out — check your connection and try again")), 12000)
+        ),
+      ]);
+
       const {data:{session}} = await supabaseAuth.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) throw new Error("You must be signed in to save a bill");
@@ -265,67 +282,60 @@ export default function ScanPage() {
       const total = manualTotal || items.reduce((s,i)=>s+i.actual_price,0);
 
       if (!force) {
-        const {data:existingBills} = await supabase
-          .from("expenses")
-          .select("id,bill_number,total")
-          .eq("user_id",userId)
-          .eq("store_name",storeName)
-          .eq("purchase_date",purchaseDate);
-
+        const {data:existingBills} = await timed(
+          supabase.from("expenses").select("id,bill_number,total")
+            .eq("user_id",userId).eq("store_name",storeName).eq("purchase_date",purchaseDate)
+        );
         if (existingBills&&existingBills.length>0) {
-          const byBillNum = billNumber
-            ? existingBills.find(b=>b.bill_number&&b.bill_number===billNumber)
-            : null;
+          const byBillNum = billNumber ? existingBills.find(b=>b.bill_number&&b.bill_number===billNumber) : null;
           const byTotal = existingBills.find(b=>Math.abs((b.total||0)-total)<0.01);
           const match = byBillNum||byTotal;
-          if (match) {
-            setDupWarn({matchedOn: byBillNum?"bill number":"store, date & total"});
-            return;
-          }
+          if (match) { setDupWarn({matchedOn:byBillNum?"bill number":"store, date & total"}); return; }
         }
       }
 
-      const {data:expRows, error:expErr} = await supabase.from("expenses").insert({
-        user_id:userId,store_name:storeName,
-        store_city:result.store_city||"",store_zip:result.store_zip||"",
-        bill_number:billNumber||null,
-        purchase_date:purchaseDate,
-        currency:result.currency||"USD",total,items_count:items.length,source:"receipt",
-      }).select("id");
-      if (expErr) { console.error("expenses insert error:", expErr); throw new Error(expErr.message||"Failed to save bill"); }
+      const {data:expRows, error:expErr} = await timed(
+        supabase.from("expenses").insert({
+          user_id:userId, store_name:storeName,
+          store_city:result.store_city||"", store_zip:result.store_zip||"",
+          bill_number:billNumber||null, purchase_date:purchaseDate,
+          currency:result.currency||"USD", total, items_count:items.length, source:"receipt",
+        }).select("id")
+      );
+      if (expErr) throw new Error(expErr.message||"Failed to save bill");
       const expense = expRows?.[0];
 
       if (expense?.id) {
-        const {error:itemsErr} = await supabase.from("expense_items").insert(items.map(i=>({
-          expense_id:expense.id,name:i.name,price:i.actual_price,
-          quantity:i.quantity,unit:i.unit,category:i.category,
-        })));
+        const {error:itemsErr} = await timed(
+          supabase.from("expense_items").insert(items.map(i=>({
+            expense_id:expense.id, name:i.name, price:i.actual_price,
+            quantity:i.quantity, unit:i.unit, category:i.category,
+          })))
+        );
         if (itemsErr) console.error("expense_items insert error:", itemsErr);
       }
 
+      // Non-blocking: price history and points don't block the save confirmation
       if (sharePrices&&(result.store_name||linkedBrand)) {
         const storeNameForHistory = linkedBrand?.name||result.store_name;
         const storeCityForHistory = linkedLocation?.city||result.store_city||"";
         const phItems = items.filter(i=>i.unit_price>0&&i.name.trim()).map(i=>({
           normalized_name:i.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""),
-          item_name:i.name.trim(),category:i.category||"Other",
-          store_name:storeNameForHistory,store_city:storeCityForHistory,
-          price:i.unit_price,unit:i.unit,currency:result.currency||"USD",
-          source:"receipt",recorded_at:new Date().toISOString(),
+          item_name:i.name.trim(), category:i.category||"Other",
+          store_name:storeNameForHistory, store_city:storeCityForHistory,
+          price:i.unit_price, unit:i.unit, currency:result.currency||"USD",
+          source:"receipt", recorded_at:new Date().toISOString(),
         }));
-        if (phItems.length) {
-          const {error:phErr} = await supabase.from("price_history").insert(phItems);
-          if (phErr) console.error("price_history insert error:", phErr);
-        }
+        if (phItems.length) supabase.from("price_history").insert(phItems).then(({error:phErr})=>{ if(phErr) console.error("price_history error:",phErr); });
       }
 
       const pts = 5+(items.length*2);
       addPoints(pts);
       if (userId) {
-        const {data:prof} = await supabase.from("user_profiles").select("points").eq("user_id",userId).single();
-        const newPts = (prof?.points||0)+pts;
-        await supabase.from("user_profiles").upsert({user_id:userId,points:newPts,updated_at:new Date().toISOString()},{onConflict:"user_id"});
-        if (user) setUser({...user,points:newPts});
+        supabase.from("user_profiles").select("points").eq("user_id",userId).maybeSingle().then(({data:prof})=>{
+          const newPts = (prof?.points||0)+pts;
+          supabase.from("user_profiles").upsert({user_id:userId,points:newPts,updated_at:new Date().toISOString()},{onConflict:"user_id"}).then(()=>{ if(user) setUser({...user,points:newPts}); });
+        });
       }
 
       setSaved(true); setStep("confirm");

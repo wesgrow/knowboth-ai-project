@@ -191,7 +191,13 @@ export default function PostDealPage() {
     setAddingBrand(true);
     try {
       const slug = toSlug(name);
-      const { data, error } = await supabase.from("brands").insert({ name, slug }).select("id,name,slug").maybeSingle();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Request timed out — check your connection and try again")), 12000)
+      );
+      const { data, error } = await Promise.race([
+        supabase.from("brands").insert({ name, slug }).select("id,name,slug").maybeSingle(),
+        timeout,
+      ]);
       if (error) {
         if (error.code === "23505") toast.error("A store with that name already exists");
         else toast.error(`Could not create store: ${error.message}`);
@@ -199,14 +205,12 @@ export default function PostDealPage() {
       }
       if (!data) { toast.error("Store creation failed — check permissions"); return; }
 
-      // Close sheet and update UI immediately — don't make user wait for follow-up calls
       setSelectedBrand(data);
       setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone("");
       setShowAddBrand(false);
       setAddingBrand(false);
       toast.success(`✦ ${name} added`);
 
-      // Run follow-ups in background without blocking
       fetchBrands();
       if (pendingExtractedLocs.length > 0) {
         matchAndApplyLocations(data.id, data.name, pendingExtractedLocs, []).catch(console.error);
@@ -214,7 +218,7 @@ export default function PostDealPage() {
         fetchLocations(data.id);
       }
     } catch(e: any) {
-      toast.error(e.message || "Failed to create store");
+      toast.error(e.message || "Failed to add store");
       setAddingBrand(false);
     }
   }
