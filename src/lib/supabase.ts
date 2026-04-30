@@ -6,11 +6,10 @@ const supabase = createClientComponentClient();
 export { supabase };
 export const supabaseAuth = supabase;
 
-// Wraps a Supabase call with a timeout + one automatic retry.
-// On free-tier projects, the first request after inactivity can hang while
-// the DB wakes up. The retry fires after a 3-second pause, by which point
-// Supabase is usually awake and the second attempt succeeds.
-export async function timedRetry<T>(fn: () => PromiseLike<T>, timeoutMs = 12000): Promise<T> {
+// Wraps a Supabase call with a timeout + automatic retries.
+// Free-tier Supabase projects can take up to 60s to wake from pause.
+// 60s × 4 attempts + 8s gaps = ~276s max coverage.
+export async function timedRetry<T>(fn: () => PromiseLike<T>, timeoutMs = 60000, maxRetries = 4): Promise<T> {
   const attempt = (): Promise<T> => Promise.race([
     Promise.resolve(fn()),
     new Promise<never>((_, reject) =>
@@ -18,20 +17,15 @@ export async function timedRetry<T>(fn: () => PromiseLike<T>, timeoutMs = 12000)
     ),
   ]);
 
-  try {
-    return await attempt();
-  } catch (e: any) {
-    if (e.message !== "__timeout__") throw e;
-    // First attempt timed out — wait for Supabase to wake up, then retry once
-    await new Promise(r => setTimeout(r, 3000));
+  for (let i = 0; i < maxRetries; i++) {
     try {
       return await attempt();
-    } catch (e2: any) {
-      throw new Error(
-        e2.message === "__timeout__"
-          ? "Request timed out — check your connection and try again"
-          : e2.message
-      );
+    } catch (e: any) {
+      if (e.message !== "__timeout__") throw e; // real error, don't retry
+      if (i < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 8000)); // wait 8s between retries
+      }
     }
   }
+  throw new Error("Server is not responding. Please check your connection and try again.");
 }
