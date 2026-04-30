@@ -4,8 +4,8 @@
   "description": "Know Your Savings. Know Your Spending.",
   "start_url": "/home",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#F5A623",
+  "background_color": "#1a1a1a",
+  "theme_color": "#FF9F0A",
   "orientation": "portrait",
   "icons": [
     {

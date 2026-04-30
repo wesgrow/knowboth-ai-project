@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthSync } from "@/components/AuthSync";
+import { PWAInstall } from "@/components/PWAInstall";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Navbar } from "@/components/Navbar";
 import { ChatWidget } from "@/components/ChatWidget";
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider>
           <AuthSync/>
+          <PWAInstall/>
           <Navbar/>
           <div className="main-content">
             {children}
