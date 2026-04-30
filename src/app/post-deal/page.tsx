@@ -198,18 +198,23 @@ export default function PostDealPage() {
         return;
       }
       if (!data) { toast.error("Store creation failed — check permissions"); return; }
-      await fetchBrands();
+
+      // Close sheet and update UI immediately — don't make user wait for follow-up calls
       setSelectedBrand(data);
-      setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
+      setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone("");
+      setShowAddBrand(false);
+      setAddingBrand(false);
       toast.success(`✦ ${name} added`);
+
+      // Run follow-ups in background without blocking
+      fetchBrands();
       if (pendingExtractedLocs.length > 0) {
-        await matchAndApplyLocations(data.id, data.name, pendingExtractedLocs, []);
+        matchAndApplyLocations(data.id, data.name, pendingExtractedLocs, []).catch(console.error);
       } else {
-        await fetchLocations(data.id);
+        fetchLocations(data.id);
       }
     } catch(e: any) {
       toast.error(e.message || "Failed to create store");
-    } finally {
       setAddingBrand(false);
     }
   }
