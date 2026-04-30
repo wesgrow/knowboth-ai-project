@@ -172,12 +172,12 @@ export default function ScanPage() {
       if (!data) { toast.error("Store creation failed — check permissions"); return; }
       setLinkedBrand(data); setLinkedLocation(null);
       setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone(""); setShowAddBrand(false);
-      setAddingBrand(false);
       toast.success(`✦ ${name} added`);
       setBrands(prev=>[...prev,data].sort((a,b)=>a.name.localeCompare(b.name)));
       fetchBrandLocations(data.id);
     } catch(e:any) {
       toast.error(e.message||"Failed to add store");
+    } finally {
       setAddingBrand(false);
     }
   }
@@ -196,13 +196,21 @@ export default function ScanPage() {
     if (newLocLat != null) locPayload.lat = newLocLat;
     if (newLocLng != null) locPayload.lng = newLocLng;
     if (newLocMapLink) locPayload.map_link = newLocMapLink;
-    const { data, error } = await supabase.from("store_locations").insert(locPayload).select("id,branch_name,address,city,state,zip,phone,lat,lng,map_link").single();
-    if (error) { console.error("createLocation error:", error); toast.error(`Could not add location: ${error.message}`); setAddingLoc(false); return; }
-    setLocations(prev=>[...prev,data]);
-    setLinkedLocation(data);
-    setNewLocBranch(""); setNewLocAddress(""); setNewLocCity(""); setNewLocState(""); setNewLocZip(""); setNewLocPhone(""); setNewLocLat(null); setNewLocLng(null); setNewLocMapLink(""); setShowAddLoc(false);
-    toast.success("Location added");
-    setAddingLoc(false);
+    try {
+      const { data, error } = await timedRetry(() =>
+        supabase.from("store_locations").insert(locPayload).select("id,branch_name,address,city,state,zip,phone,lat,lng,map_link").maybeSingle()
+      );
+      if (error) { toast.error(`Could not add location: ${error.message}`); return; }
+      if (!data) { toast.error("Location creation failed — check permissions"); return; }
+      setLocations(prev=>[...prev,data]);
+      setLinkedLocation(data);
+      setNewLocBranch(""); setNewLocAddress(""); setNewLocCity(""); setNewLocState(""); setNewLocZip(""); setNewLocPhone(""); setNewLocLat(null); setNewLocLng(null); setNewLocMapLink(""); setShowAddLoc(false);
+      toast.success("Location added");
+    } catch(e:any) {
+      toast.error(e.message||"Failed to add location");
+    } finally {
+      setAddingLoc(false);
+    }
   }
 
   function handleFile(f: File) {

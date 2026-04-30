@@ -204,7 +204,6 @@ export default function PostDealPage() {
       setSelectedBrand(data);
       setNewBrandName(""); setNewBrandWebsite(""); setNewBrandPhone("");
       setShowAddBrand(false);
-      setAddingBrand(false);
       toast.success(`✦ ${name} added`);
 
       fetchBrands();
@@ -215,6 +214,7 @@ export default function PostDealPage() {
       }
     } catch(e: any) {
       toast.error(e.message || "Failed to add store");
+    } finally {
       setAddingBrand(false);
     }
   }
@@ -233,12 +233,19 @@ export default function PostDealPage() {
     if (newLocLat != null) locPayload.lat = newLocLat;
     if (newLocLng != null) locPayload.lng = newLocLng;
     if (newLocMapLink) locPayload.map_link = newLocMapLink;
-    const { error } = await supabase.from("store_locations").insert(locPayload);
-    if (error) { console.error("createLocation error:", error); toast.error(`Could not add location: ${error.message}`); setAddingLoc(false); return; }
-    await fetchLocations(selectedBrand.id);
-    setNewLocBranch(""); setNewLocAddress(""); setNewLocCity(""); setNewLocState(""); setNewLocZip(""); setNewLocPhone(""); setNewLocLat(null); setNewLocLng(null); setNewLocMapLink(""); setShowAddLoc(false);
-    toast.success("Location added");
-    setAddingLoc(false);
+    try {
+      const { error } = await timedRetry(() =>
+        supabase.from("store_locations").insert(locPayload)
+      );
+      if (error) { toast.error(`Could not add location: ${error.message}`); return; }
+      fetchLocations(selectedBrand.id);
+      setNewLocBranch(""); setNewLocAddress(""); setNewLocCity(""); setNewLocState(""); setNewLocZip(""); setNewLocPhone(""); setNewLocLat(null); setNewLocLng(null); setNewLocMapLink(""); setShowAddLoc(false);
+      toast.success("Location added");
+    } catch(e:any) {
+      toast.error(e.message||"Failed to add location");
+    } finally {
+      setAddingLoc(false);
+    }
   }
 
   function handleFiles(newFiles: FileList|null) {
