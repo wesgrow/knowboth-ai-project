@@ -41,22 +41,25 @@ async function syncUserProfile(session: any) {
 }
 
 export function AuthSync() {
-  const { user, setUser } = useAppStore();
+  const { setUser, clearUser } = useAppStore();
 
   useEffect(() => {
     supabaseAuth.auth.getSession().then(async ({ data: { session } }) => {
-      if (session && !user) {
+      if (session) {
         const profile = await syncUserProfile(session);
         setUser(profile);
       }
     });
 
     const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session && !user) {
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
         const profile = await syncUserProfile(session);
         setUser(profile);
       }
-      if (event === "SIGNED_OUT") window.location.href = "/auth";
+      if (event === "SIGNED_OUT") {
+        clearUser();
+        window.location.href = "/auth";
+      }
     });
 
     return () => subscription.unsubscribe();

@@ -23,6 +23,7 @@ interface AppStore {
   updatePantryQty:(id:string,qty:number)=>void;
   removeFromPantry:(id:string)=>void;
   restockItem:(item:PantryItem)=>void;
+  clearUser:()=>void;
   addPoints:(pts:number)=>void;
 }
 
@@ -54,5 +55,9 @@ export const useAppStore = create<AppStore>()(persist((set,get)=>({
     if(ex){set(s=>({cart:s.cart.map(i=>i.name===item.name&&!i.purchased?{...i,qty:i.qty+1}:i)}));}
     else{set(s=>({cart:[...s.cart,{id:Date.now().toString(),name:item.name,price:item.price,unit:item.unit,store:item.store,store_slug:"",category:item.category,icon:item.icon,qty:1,purchased:false}]}));}
   },
+  clearUser:()=>set({user:null}),
   addPoints:(pts)=>set(s=>({user:s.user?{...s.user,points:(s.user.points||0)+pts}:null})),
-}),{name:"knowboth-v1"}));
+}),{
+  name:"knowboth-v1",
+  partialize:(state)=>({ cart:state.cart, pantry:state.pantry, radius:state.radius }),
+}));
