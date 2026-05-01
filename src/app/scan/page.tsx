@@ -303,17 +303,23 @@ export default function ScanPage() {
         }).select("id")
       );
       if (expErr) throw new Error(expErr.message||"Failed to save bill");
-      const expense = expRows?.[0];
-
-      if (expense?.id) {
-        const {error:itemsErr} = await timedRetry(() =>
-          supabase.from("expense_items").insert(items.map((i:any)=>({
-            expense_id:expense.id, name:i.name, price:i.actual_price,
-            quantity:i.quantity, unit:i.unit, category:i.category,
-          })))
-        );
-        if (itemsErr) console.error("expense_items insert error:", itemsErr);
+      let expenseId: string | undefined = expRows?.[0]?.id;
+      if (!expenseId) {
+        const {data:fetched} = await supabase.from("expenses")
+          .select("id").eq("user_id",userId).eq("store_name",storeName)
+          .eq("purchase_date",purchaseDate).order("created_at",{ascending:false})
+          .limit(1).maybeSingle();
+        expenseId = fetched?.id;
       }
+      if (!expenseId) throw new Error("Bill saved but could not retrieve ID. Please reload.");
+
+      const {error:itemsErr} = await timedRetry(() =>
+        supabase.from("expense_items").insert(items.map((i:any)=>({
+          expense_id:expenseId, name:i.name, price:i.actual_price,
+          quantity:i.quantity, unit:i.unit, category:i.category,
+        })))
+      );
+      if (itemsErr) toast.error(`⚠️ Bill saved but items failed: ${itemsErr.message}`);
 
       // Non-blocking: price history and points don't block the save confirmation
       if (sharePrices&&(result.store_name||linkedBrand)) {
