@@ -66,7 +66,7 @@ export function AddCartItemForm({ onClose }: Props) {
     valid.forEach(r => addCartItemManual({
       name: r.name.trim(), store: storeName, store_id: storeId,
       price: r.price ? parseFloat(r.price) : 0,
-      qty: Math.max(1, parseInt(r.qty) || 1),
+      qty: Math.max(0.01, parseFloat(r.qty) || 0.01),
       category: r.cat, notes: r.notes.trim() || undefined,
     }));
     toast.success(`${valid.length} item${valid.length>1?"s":""} added`);
@@ -120,7 +120,7 @@ export function AddCartItemForm({ onClose }: Props) {
                 <input type="number" value={r.price} onChange={e=>upd(i,"price",e.target.value)}
                   placeholder="Price" min="0" step="0.01" style={{...inp,width:76,padding:"8px 10px",fontSize:14}} />
                 <input type="number" value={r.qty} onChange={e=>upd(i,"qty",e.target.value)}
-                  min="1" placeholder="Qty" style={{...inp,width:58,padding:"8px 10px",fontSize:14}} />
+                  min="0.01" step="0.01" placeholder="Qty" style={{...inp,width:58,padding:"8px 10px",fontSize:14}} />
               </div>
               <input value={r.notes} onChange={e=>upd(i,"notes",e.target.value)} placeholder="Notes (optional)"
                 style={{...inp,marginTop:6,padding:"8px 12px",fontSize:14}} />

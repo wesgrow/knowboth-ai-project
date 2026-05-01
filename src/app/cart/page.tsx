@@ -16,7 +16,7 @@ const CAT_ICONS: Record<string,string> = {
 
 export default function CartPage() {
   const router = useRouter();
-  const { cart, removeFromCart, updateQty, clearCart, togglePurchased, moveToPantry, user } = useAppStore();
+  const { cart, removeFromCart, updateQty, clearCart, togglePurchased, moveToPantry, updateNotes, user } = useAppStore();
   const [showSummary, setShowSummary] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [savingsMap, setSavingsMap] = useState<Record<string, {price:number, store:string}>>({});
@@ -161,6 +161,14 @@ export default function CartPage() {
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,fontWeight:600,color:"var(--text)",wordBreak:"break-word",lineHeight:1.3,textDecoration:item.purchased?"line-through":"none"}}>{item.name}</div>
                         <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{item.category} · {item.unit}</div>
+                        <input
+                          key={`note-${item.id}`}
+                          type="text"
+                          defaultValue={item.notes || ""}
+                          placeholder="Add note…"
+                          onBlur={e => updateNotes(item.id, e.target.value)}
+                          style={{marginTop:4,width:"100%",fontSize:11,color:"var(--text2)",background:"transparent",border:"none",borderBottom:"0.5px solid var(--border2)",padding:"2px 0",outline:"none",fontFamily:"inherit"}}
+                        />
                         <div style={{display:"flex",gap:4,marginTop:7,flexWrap:"wrap"}}>
                           <button onClick={()=>{moveToPantry(item);toast.success(`${item.name} moved to stock`);}}
                             title="Move to Stock"
@@ -181,7 +189,15 @@ export default function CartPage() {
                       <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
                         <div style={{display:"flex",alignItems:"center",gap:4}}>
                           <button onClick={()=>updateQty(item.id,item.qty-1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-                          <span style={{fontSize:13,fontWeight:700,color:"var(--text)",minWidth:18,textAlign:"center"}}>{item.qty}</span>
+                          <input
+                            key={`qty-${item.id}-${item.qty}`}
+                            type="number"
+                            defaultValue={item.qty}
+                            min="0.01"
+                            step="0.01"
+                            onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)&&v>0)updateQty(item.id,v);}}
+                            style={{width:46,fontSize:13,fontWeight:700,color:"var(--text)",textAlign:"center",border:"1px solid var(--border)",borderRadius:7,background:"var(--bg)",padding:"2px 4px",outline:"none"}}
+                          />
                           <button onClick={()=>updateQty(item.id,item.qty+1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
                         </div>
                         <div style={{textAlign:"right"}}>

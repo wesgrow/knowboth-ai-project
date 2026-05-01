@@ -68,6 +68,7 @@ function DealsContent() {
     return `https://maps.google.com?q=${q}`;
   }
   const [page, setPage] = useState(1);
+  const [addingItem, setAddingItem] = useState<{item:any;qty:string;notes:string}|null>(null);
   const { addToCart, cart } = useAppStore();
 
   useEffect(() => { fetchDeals(); }, []);
@@ -262,8 +263,20 @@ function DealsContent() {
 
   function addItem(item: any) {
     if (cart.find(i => i.id === item.id)) { toast("Already in cart"); return; }
-    addToCart({ id: item.id, name: item.name, price: item.price, unit: item.unit || "ea", store: item.brand?.name || "", store_slug: item.brand?.slug || "", category: item.category || "Other", icon: "🛒" });
-    toast.success(`✦ ${item.name} added from ${item.brand?.name}`);
+    setAddingItem({ item, qty: "1", notes: "" });
+  }
+
+  function confirmAddItem() {
+    if (!addingItem) return;
+    const { item, qty, notes } = addingItem;
+    const parsedQty = parseFloat(qty) || 1;
+    addToCart(
+      { id: item.id, name: item.name, price: item.price, unit: item.unit || "ea", store: item.brand?.name || "", store_slug: item.brand?.slug || "", category: item.category || "Other", icon: "🛒" },
+      parsedQty,
+      notes.trim() || undefined
+    );
+    toast.success(`✦ ${item.name} added`);
+    setAddingItem(null);
   }
 
   const S = { padding: "10px 14px", fontSize: 13, fontWeight: 600 as const, color: "#1C1C1E", borderBottom: "0.5px solid #F2F2F7", verticalAlign: "middle" as const };
@@ -708,6 +721,58 @@ function DealsContent() {
             ))}
       </div>
     </div>
+    {/* Add to cart modal */}
+    {addingItem && (
+      <div onClick={e=>e.target===e.currentTarget&&setAddingItem(null)}
+        style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center",backdropFilter:"blur(4px)"}}>
+        <div style={{background:"var(--surf,#fff)",borderRadius:"20px 20px 0 0",padding:"24px 20px 40px",width:"100%",maxWidth:480}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <span style={{fontSize:16,fontWeight:800,color:"var(--text,#1C1C1E)"}}>Add to Cart</span>
+            <button onClick={()=>setAddingItem(null)} style={{background:"none",border:"none",fontSize:18,color:"#AEAEB2",cursor:"pointer",padding:4}}>✕</button>
+          </div>
+          <div style={{fontSize:14,fontWeight:600,color:"var(--text,#1C1C1E)",marginBottom:2}}>{addingItem.item.name}</div>
+          <div style={{fontSize:12,color:"#AEAEB2",marginBottom:18}}>
+            {addingItem.item.brand?.name} · ${addingItem.item.price?.toFixed(2)}/{addingItem.item.unit||"ea"}
+          </div>
+          <div style={{display:"flex",gap:12,marginBottom:14}}>
+            <div style={{width:120}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#AEAEB2",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Quantity</div>
+              <input
+                type="number"
+                value={addingItem.qty}
+                onChange={e=>setAddingItem(p=>p&&{...p,qty:e.target.value})}
+                min="0.01"
+                step="0.01"
+                autoFocus
+                style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px 12px",fontSize:16,color:"#1C1C1E",outline:"none",boxSizing:"border-box" as const}}
+              />
+            </div>
+          </div>
+          <div style={{marginBottom:18}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#AEAEB2",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Notes (optional)</div>
+            <input
+              type="text"
+              value={addingItem.notes}
+              onChange={e=>setAddingItem(p=>p&&{...p,notes:e.target.value})}
+              onKeyDown={e=>e.key==="Enter"&&confirmAddItem()}
+              placeholder="e.g. organic, size preference…"
+              style={{width:"100%",background:"#F2F2F7",border:"none",borderRadius:10,padding:"10px 12px",fontSize:14,color:"#1C1C1E",outline:"none",boxSizing:"border-box" as const}}
+            />
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setAddingItem(null)}
+              style={{padding:"13px 20px",background:"#F2F2F7",border:"none",borderRadius:12,fontSize:14,fontWeight:600,color:"#6D6D72",cursor:"pointer"}}>
+              Cancel
+            </button>
+            <button onClick={confirmAddItem}
+              style={{flex:1,padding:"13px",background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+              Add to Cart
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Store branches sheet */}
     <BottomSheet open={!!storeSheet} onClose={()=>setStoreSheet(null)} label="Store Branches">
       {storeSheet&&(
