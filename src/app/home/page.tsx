@@ -9,7 +9,7 @@ import { Button, Card, Skeleton, Badge } from "@/ui";
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, cart } = useAppStore();
+  const { user, cart, updateBudget, monthly_budget } = useAppStore();
   const [deals, setDeals] = useState<any[]>([]);
   const [thisMonthSpent, setThisMonthSpent] = useState(0);
   const [lastMonthSpent, setLastMonthSpent] = useState(0);
@@ -19,6 +19,8 @@ export default function HomePage() {
   const [tip, setTip] = useState("Compare prices before shopping — deals change weekly.");
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingDeals, setLoadingDeals] = useState(true);
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [budgetInput, setBudgetInput] = useState("");
   const currency = user?.currency || "USD";
   const fmt = (n: number) => formatCurrency(n, currency);
   const cartCount = cart?.filter((i:any) => !i.purchased)?.length || 0;
@@ -81,6 +83,17 @@ export default function HomePage() {
       setDeals((items||[]).map((i:any)=>({...i,brand:bMap[dMap[i.deal_id]?.brand_id]})));
     } catch(e) { console.error("Deals error:",e); }
     setLoadingDeals(false);
+  }
+
+  async function saveBudget() {
+    const val = parseFloat(budgetInput);
+    if (isNaN(val) || val <= 0) return;
+    updateBudget(val);
+    setEditingBudget(false);
+    const { data: { session } } = await supabaseAuth.auth.getSession();
+    if (session?.user?.id) {
+      await supabase.from("user_profiles").update({ monthly_budget: val }).eq("user_id", session.user.id);
+    }
   }
 
   function rotateTip() {
@@ -220,6 +233,60 @@ export default function HomePage() {
               ✦ Saving {fmt(Math.abs(spendDiff))} more than last month
             </div>
           )}
+
+          {/* Budget status */}
+          {!loadingStats&&(()=>{
+            const budget = monthly_budget;
+            if (editingBudget) {
+              return (
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"var(--text3)",letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Monthly Budget</div>
+                  <div style={{display:"flex",gap:8}}>
+                    <input
+                      type="number" min="1" step="1" autoFocus
+                      value={budgetInput} onChange={e=>setBudgetInput(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter")saveBudget();if(e.key==="Escape")setEditingBudget(false);}}
+                      placeholder="e.g. 500"
+                      style={{flex:1,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"9px 12px",fontSize:15,color:"var(--text)",outline:"none",fontFamily:"inherit"}}
+                    />
+                    <button onClick={saveBudget} style={{background:"var(--gold)",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>Save</button>
+                    <button onClick={()=>setEditingBudget(false)} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"9px 12px",fontSize:14,color:"var(--text2)",cursor:"pointer",flexShrink:0}}>✕</button>
+                  </div>
+                </div>
+              );
+            }
+            if (!budget) {
+              return (
+                <button onClick={()=>{setBudgetInput("");setEditingBudget(true);}}
+                  style={{width:"100%",marginBottom:10,padding:"9px 12px",background:"none",border:"1px dashed var(--border)",borderRadius:10,fontSize:13,fontWeight:600,color:"var(--text2)",cursor:"pointer",textAlign:"left"}}>
+                  + Set Monthly Budget
+                </button>
+              );
+            }
+            const pct = Math.min(100, Math.round((thisMonthSpent/budget)*100));
+            const remaining = budget - thisMonthSpent;
+            const over = remaining < 0;
+            const barColor = pct >= 100 ? "var(--red)" : pct >= 80 ? "#FF9F0A" : "var(--green)";
+            return (
+              <div style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"var(--text3)",letterSpacing:0.5,textTransform:"uppercase"}}>Monthly Budget</div>
+                  <button onClick={()=>{setBudgetInput(String(budget));setEditingBudget(true);}}
+                    style={{background:"none",border:"none",fontSize:12,color:"var(--text3)",cursor:"pointer",padding:"2px 4px"}}>✎ Edit</button>
+                </div>
+                <div style={{height:8,background:"var(--bg)",borderRadius:6,overflow:"hidden",marginBottom:6}}>
+                  <div style={{height:"100%",width:`${pct}%`,background:barColor,borderRadius:6,transition:"width 0.5s ease"}}/>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:12,fontWeight:700,color:over?"var(--red)":barColor}}>
+                    {over ? `Over by ${fmt(Math.abs(remaining))}` : `${fmt(remaining)} left`}
+                  </div>
+                  <div style={{fontSize:11,color:"var(--text3)"}}>{pct}% of {fmt(budget)}</div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div style={{display:"flex",justifyContent:"flex-end"}}>
             <Button variant="link" size="sm" onClick={()=>router.push("/expenses")}>View all expenses →</Button>
           </div>

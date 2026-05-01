@@ -17,7 +17,7 @@ const CAT_COLORS: Record<string,string> = {
 };
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const PRESETS = [{l:"3M",m:3},{l:"6M",m:6},{l:"12M",m:12}];
+const PRESETS = [{label:"7 days",days:7},{label:"30 days",days:30},{label:"90 days",days:90},{label:"6 months",days:180},{label:"All time",days:-1}];
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 interface TopItem      { name: string; amount: number; }
@@ -34,8 +34,16 @@ interface BigBill      { id: string; store: string; total: number; date: string;
 
 export default function AnalyticsPage() {
   const router = useRouter();
-  const { user, cart } = useAppStore();
-  const [months, setMonths] = useState(6);
+  const { user, cart, updateBudget, monthly_budget } = useAppStore();
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [filterStore, setFilterStore] = useState("All");
+  const [filterCat, setFilterCat] = useState("All");
+  const [rawExpenses, setRawExpenses] = useState<any[]>([]);
+  const [rawItems, setRawItems] = useState<any[]>([]);
+  const [rawDeals, setRawDeals] = useState<any[]>([]);
+  const [allStores, setAllStores] = useState<string[]>([]);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string|null>(null);
   const [monthlySpend, setMonthlySpend] = useState<MonthlySpend[]>([]);
@@ -48,8 +56,6 @@ export default function AnalyticsPage() {
   const [totalSaved, setTotalSaved] = useState(0);
   const [insights, setInsights] = useState<{icon:string;text:string;color:string}[]>([]);
   const [sheet, setSheet] = useState<Sheet|null>(null);
-  // New feature state
-  const [budget, setBudget] = useState(0);
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetInput, setBudgetInput] = useState("");
   const [topPurchased, setTopPurchased] = useState<TopPurchased[]>([]);
@@ -58,18 +64,29 @@ export default function AnalyticsPage() {
   const [savingsOpps, setSavingsOpps] = useState<SavingsOpp[]>([]);
   const [biggestBills, setBiggestBills] = useState<BigBill[]>([]);
 
+  const budget = monthly_budget || 0;
   const currency = user?.currency || "USD";
-  const fmt = (n: number) => formatCurrency(n, currency);
+  const fmt = useCallback((n: number) => formatCurrency(n, currency), [currency]);
 
-  useEffect(() => {
-    const saved = localStorage.getItem("knowboth-budget");
-    if (saved) setBudget(Number(saved));
-  }, []);
-
-  function saveBudget() {
+  async function saveBudget() {
     const v = Number(budgetInput);
-    if (v > 0) { setBudget(v); localStorage.setItem("knowboth-budget", String(v)); }
+    if (v > 0) {
+      updateBudget(v);
+      const { data: { session } } = await supabaseAuth.auth.getSession();
+      if (session?.user?.id) {
+        await supabase.from("user_profiles").update({ monthly_budget: v }).eq("user_id", session.user.id);
+      }
+    }
     setEditingBudget(false);
+  }
+
+  function applyPreset(days: number) {
+    if (days === -1) { setDateFrom(""); setDateTo(""); return; }
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+    setDateFrom(from.toISOString().split("T")[0]);
+    setDateTo(to.toISOString().split("T")[0]);
   }
 
   const fetchAnalytics = useCallback(async () => {
@@ -79,174 +96,168 @@ export default function AnalyticsPage() {
       if (!session?.user?.id) { router.push("/auth"); return; }
       const userId = session.user.id;
 
-      const fromDate = new Date();
-      fromDate.setMonth(fromDate.getMonth() - months);
-      const fromStr = fromDate.toISOString().split("T")[0];
-
-      const { data:expenses, error:ee } = await supabase
+      let query = supabase
         .from("expenses").select("id,store_name,total,purchase_date,items_count")
-        .eq("user_id", userId).gte("purchase_date", fromStr).order("purchase_date",{ascending:true});
+        .eq("user_id", userId).order("purchase_date",{ascending:true});
+      if (dateFrom) query = query.gte("purchase_date", dateFrom);
+      if (dateTo)   query = query.lte("purchase_date", dateTo);
+
+      const { data:expenses, error:ee } = await query;
       if (ee) throw new Error(ee.message);
 
-      if (!expenses?.length) {
-        setMonthlySpend([]); setCategorySpend([]); setStoreSpend([]);
-        setTotalSpent(0); setAvgMonthly(0); setTotalBills(0);
-        setLoading(false); return;
+      const expList = expenses || [];
+      setRawExpenses(expList);
+      setAllStores([...new Set(expList.map((e:any) => e.store_name))].sort() as string[]);
+
+      if (expList.length > 0) {
+        const expIds = expList.map((e:any) => e.id);
+        const { data:items } = await supabase
+          .from("expense_items").select("expense_id,category,name,price,quantity").in("expense_id", expIds);
+        setRawItems(items || []);
+        setAllCategories([...new Set((items || []).map((i:any) => i.category))].sort() as string[]);
+
+        const dealFrom = dateFrom || expList[0].purchase_date;
+        const { data:deals } = await supabase
+          .from("deal_items").select("price,regular_price,name,normalized_name,created_at").gte("created_at", dealFrom);
+        setRawDeals(deals || []);
+      } else {
+        setRawItems([]); setRawDeals([]); setAllCategories([]);
       }
-
-      // ── Monthly spend ──
-      const monthMap: Record<string,{amount:number;bills:number}> = {};
-      expenses.forEach(e => {
-        const d = new Date(e.purchase_date);
-        const key = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-        if (!monthMap[key]) monthMap[key] = {amount:0,bills:0};
-        monthMap[key].amount += Number(e.total);
-        monthMap[key].bills += 1;
-      });
-      const monthlyData = Object.entries(monthMap).map(([month,v])=>({month,...v}));
-      setMonthlySpend(monthlyData);
-
-      const total = expenses.reduce((s,e)=>s+Number(e.total),0);
-      setTotalSpent(total); setTotalBills(expenses.length);
-      setAvgMonthly(monthlyData.length>0 ? total/monthlyData.length : 0);
-
-      // ── Store spend ──
-      const storeMap: Record<string,{amount:number;visits:number}> = {};
-      expenses.forEach(e => {
-        if (!storeMap[e.store_name]) storeMap[e.store_name] = {amount:0,visits:0};
-        storeMap[e.store_name].amount += Number(e.total);
-        storeMap[e.store_name].visits += 1;
-      });
-      const storeData = Object.entries(storeMap)
-        .map(([store,v])=>({store,...v,avgPerVisit:v.amount/v.visits}))
-        .sort((a,b)=>b.amount-a.amount);
-      setStoreSpend(storeData);
-
-      // ── Day of week ──
-      const dayMap: Record<string,number> = {Sun:0,Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0};
-      expenses.forEach(e => { dayMap[DAYS[new Date(e.purchase_date).getDay()]] += Number(e.total); });
-      setDaySpend(Object.entries(dayMap).map(([day,amount])=>({day,amount})));
-
-      // ── Shopping frequency (derived from expenses) ──
-      const storeDatesMap: Record<string,string[]> = {};
-      expenses.forEach(e => {
-        if (!storeDatesMap[e.store_name]) storeDatesMap[e.store_name] = [];
-        storeDatesMap[e.store_name].push(e.purchase_date);
-      });
-      const freqData: StoreFreq[] = Object.entries(storeDatesMap)
-        .filter(([,dates]) => dates.length >= 2)
-        .map(([store, dates]) => {
-          const sorted = [...dates].sort();
-          const gaps: number[] = [];
-          for (let i = 1; i < sorted.length; i++)
-            gaps.push(Math.round((new Date(sorted[i]).getTime()-new Date(sorted[i-1]).getTime())/86400000));
-          return { store, avgDays: Math.round(gaps.reduce((s,v)=>s+v,0)/gaps.length), visits: sorted.length, lastVisit: sorted[sorted.length-1] };
-        })
-        .sort((a,b)=>a.avgDays-b.avgDays);
-      setStoreFreq(freqData);
-
-      // ── Biggest bills (derived from expenses) ──
-      setBiggestBills(
-        [...expenses].sort((a,b)=>Number(b.total)-Number(a.total)).slice(0,5)
-          .map(e=>({id:e.id,store:e.store_name,total:Number(e.total),date:e.purchase_date,itemsCount:e.items_count||0}))
-      );
-
-      // ── Expense items (expense_id needed for trend split) ──
-      const expIds = expenses.map(e=>e.id);
-      const { data:items } = await supabase
-        .from("expense_items").select("expense_id,category,name,price,quantity").in("expense_id",expIds);
-
-      const catMap: Record<string,number> = {};
-      const itemMap: Record<string,Record<string,number>> = {};
-      const itemCountMap: Record<string,{count:number;total:number}> = {};
-      (items||[]).forEach(i => {
-        const amt = Number(i.price)*Number(i.quantity);
-        catMap[i.category] = (catMap[i.category]||0)+amt;
-        if (!itemMap[i.category]) itemMap[i.category] = {};
-        itemMap[i.category][i.name] = (itemMap[i.category][i.name]||0)+amt;
-        const key = i.name?.toLowerCase().trim()||"";
-        if (!itemCountMap[key]) itemCountMap[key] = {count:0,total:0};
-        itemCountMap[key].count += Number(i.quantity)||1;
-        itemCountMap[key].total += amt;
-      });
-
-      const catTotal = Object.values(catMap).reduce((s,v)=>s+v,0);
-      const catData = Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,8)
-        .map(([category,amount])=>({
-          category, amount,
-          pct: catTotal>0 ? Math.round((amount/catTotal)*100) : 0,
-          topItems: Object.entries(itemMap[category]||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([name,amt])=>({name,amount:amt})),
-        }));
-      setCategorySpend(catData);
-
-      // ── Top purchased items ──
-      setTopPurchased(
-        Object.entries(itemCountMap).sort((a,b)=>b[1].count-a[1].count).slice(0,8)
-          .map(([name,v])=>({name:name.charAt(0).toUpperCase()+name.slice(1),count:v.count,total:v.total}))
-      );
-
-      // ── Category trend (split period using already-fetched items) ──
-      const midTs = (new Date(fromStr).getTime()+Date.now())/2;
-      const prevExpSet = new Set(expenses.filter(e=>new Date(e.purchase_date).getTime()<midTs).map(e=>e.id));
-      const currExpSet = new Set(expenses.filter(e=>new Date(e.purchase_date).getTime()>=midTs).map(e=>e.id));
-      const prevCatMap: Record<string,number> = {};
-      const currCatMap: Record<string,number> = {};
-      (items||[]).forEach(i => {
-        const amt = Number(i.price)*Number(i.quantity);
-        if (prevExpSet.has(i.expense_id)) prevCatMap[i.category] = (prevCatMap[i.category]||0)+amt;
-        if (currExpSet.has(i.expense_id)) currCatMap[i.category] = (currCatMap[i.category]||0)+amt;
-      });
-      const allCats = [...new Set([...Object.keys(prevCatMap),...Object.keys(currCatMap)])];
-      setCatTrend(
-        allCats.map(cat=>({ category:cat, current:currCatMap[cat]||0, prev:prevCatMap[cat]||0, pct:prevCatMap[cat]>0?Math.round(((currCatMap[cat]||0)-(prevCatMap[cat]||0))/(prevCatMap[cat]||1)*100):0 }))
-          .filter(t=>t.prev>0).sort((a,b)=>Math.abs(b.pct)-Math.abs(a.pct)).slice(0,6)
-      );
-
-      // ── Deal items: savings total + savings opportunities ──
-      const twoWeeksAgo = new Date(Date.now()-14*24*60*60*1000).toISOString().split("T")[0];
-      const { data:dealItemsAll } = await supabase
-        .from("deal_items").select("price,regular_price,name,normalized_name,created_at").gte("created_at",fromStr);
-      const saved = (dealItemsAll||[]).filter(i=>i.regular_price!=null).reduce((s,i)=>{ const d=Number(i.regular_price)-Number(i.price); return s+(d>0?d:0); },0);
-      setTotalSaved(saved);
-
-      const recentDeals = (dealItemsAll||[]).filter(i=>i.created_at>=twoWeeksAgo);
-      const seen = new Set<string>();
-      const opps: SavingsOpp[] = [];
-      recentDeals.forEach((deal:any) => {
-        if (!deal.name) return;
-        const dealKey = deal.name.toLowerCase().trim();
-        if (seen.has(dealKey)) return;
-        const dealWords = dealKey.split(" ").filter((w:string)=>w.length>3);
-        const match = Object.entries(itemCountMap).find(([key]) => {
-          if (key===dealKey) return true;
-          const itemWords = key.split(" ").filter(w=>w.length>3);
-          return dealWords.some((w:string)=>itemWords.includes(w));
-        });
-        if (match) {
-          const yourAvg = match[1].total/Math.max(match[1].count,1);
-          const dealPrice = Number(deal.price);
-          if (dealPrice < yourAvg*0.9 && yourAvg > 0) {
-            seen.add(dealKey);
-            opps.push({ name:deal.name, dealPrice, yourAvg, savings:yourAvg-dealPrice });
-          }
-        }
-      });
-      setSavingsOpps(opps.sort((a,b)=>b.savings-a.savings).slice(0,5));
-
-      // ── Insights ──
-      const chips: {icon:string;text:string;color:string}[] = [];
-      if (catData.length>0) chips.push({icon:"🎯",text:`${catData[0].category} is ${catData[0].pct}% of your budget`,color:"#FF9F0A"});
-      const cheapestDay = Object.entries(dayMap).filter(([,v])=>v>0).sort((a,b)=>a[1]-b[1])[0];
-      if (cheapestDay) chips.push({icon:"📅",text:`${cheapestDay[0]} is your cheapest shopping day`,color:"#30D158"});
-      if (storeData.length>0) { const best=[...storeData].sort((a,b)=>a.avgPerVisit-b.avgPerVisit)[0]; chips.push({icon:"🏪",text:`${best.store} best value at ${fmt(best.avgPerVisit)}/visit`,color:"#0A84FF"}); }
-      if (monthlyData.length>=2) { const last=monthlyData[monthlyData.length-1].amount,prev=monthlyData[monthlyData.length-2].amount,pct=prev>0?Math.round((Math.abs(last-prev)/prev)*100):0; if(pct>0) chips.push({icon:last<prev?"📉":"📈",text:`Spending ${last<prev?"down":"up"} ${pct}% vs last month`,color:last<prev?"#30D158":"#FF3B30"}); }
-      setInsights(chips);
-
     } catch(e:any) { setError(e.message); }
     finally { setLoading(false); }
-  }, [months, router]);
+  }, [dateFrom, dateTo, router]);
 
   useEffect(()=>{ fetchAnalytics(); },[fetchAnalytics]);
+
+  // Recompute all analytics whenever raw data or filters change (no extra DB fetch needed)
+  useEffect(() => {
+    let expenses = rawExpenses;
+    let items = rawItems;
+
+    if (filterStore !== "All") {
+      expenses = expenses.filter(e => e.store_name === filterStore);
+      const ids = new Set(expenses.map(e => e.id));
+      items = items.filter(i => ids.has(i.expense_id));
+    }
+    if (filterCat !== "All") {
+      items = items.filter(i => i.category === filterCat);
+      const ids = new Set(items.map(i => i.expense_id));
+      expenses = expenses.filter(e => ids.has(e.id));
+    }
+
+    setTotalBills(expenses.length);
+    if (!expenses.length) {
+      setMonthlySpend([]); setCategorySpend([]); setStoreSpend([]);
+      setDaySpend(Object.entries({Sun:0,Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0}).map(([day,amount])=>({day,amount:amount as number})));
+      setTotalSpent(0); setAvgMonthly(0); setInsights([]); return;
+    }
+
+    const monthMap: Record<string,{amount:number;bills:number}> = {};
+    expenses.forEach((e:any) => {
+      const d = new Date(e.purchase_date);
+      const key = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+      if (!monthMap[key]) monthMap[key] = {amount:0,bills:0};
+      monthMap[key].amount += Number(e.total); monthMap[key].bills += 1;
+    });
+    const monthlyData = Object.entries(monthMap).map(([month,v])=>({month,...v}));
+    setMonthlySpend(monthlyData);
+    const total = expenses.reduce((s:number,e:any)=>s+Number(e.total),0);
+    setTotalSpent(total);
+    setAvgMonthly(monthlyData.length > 0 ? total/monthlyData.length : 0);
+
+    const storeMap: Record<string,{amount:number;visits:number}> = {};
+    expenses.forEach((e:any) => {
+      if (!storeMap[e.store_name]) storeMap[e.store_name] = {amount:0,visits:0};
+      storeMap[e.store_name].amount += Number(e.total); storeMap[e.store_name].visits += 1;
+    });
+    const storeData = Object.entries(storeMap).map(([store,v])=>({store,...v,avgPerVisit:v.amount/v.visits})).sort((a,b)=>b.amount-a.amount);
+    setStoreSpend(storeData);
+
+    const dayMap: Record<string,number> = {Sun:0,Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0};
+    expenses.forEach((e:any) => { dayMap[DAYS[new Date(e.purchase_date).getDay()]] += Number(e.total); });
+    setDaySpend(Object.entries(dayMap).map(([day,amount])=>({day,amount})));
+
+    const storeDatesMap: Record<string,string[]> = {};
+    expenses.forEach((e:any) => {
+      if (!storeDatesMap[e.store_name]) storeDatesMap[e.store_name] = [];
+      storeDatesMap[e.store_name].push(e.purchase_date);
+    });
+    setStoreFreq(Object.entries(storeDatesMap).filter(([,d])=>d.length>=2).map(([store,dates])=>{
+      const sorted=[...dates].sort(); const gaps:number[]=[];
+      for(let i=1;i<sorted.length;i++) gaps.push(Math.round((new Date(sorted[i]).getTime()-new Date(sorted[i-1]).getTime())/86400000));
+      return{store,avgDays:Math.round(gaps.reduce((s,v)=>s+v,0)/gaps.length),visits:sorted.length,lastVisit:sorted[sorted.length-1]};
+    }).sort((a,b)=>a.avgDays-b.avgDays));
+
+    setBiggestBills([...expenses].sort((a:any,b:any)=>Number(b.total)-Number(a.total)).slice(0,5)
+      .map((e:any)=>({id:e.id,store:e.store_name,total:Number(e.total),date:e.purchase_date,itemsCount:e.items_count||0})));
+
+    const catMap: Record<string,number> = {};
+    const itemMap: Record<string,Record<string,number>> = {};
+    const itemCountMap: Record<string,{count:number;total:number}> = {};
+    items.forEach((i:any) => {
+      const amt = Number(i.price)*Number(i.quantity);
+      catMap[i.category] = (catMap[i.category]||0)+amt;
+      if (!itemMap[i.category]) itemMap[i.category] = {};
+      itemMap[i.category][i.name] = (itemMap[i.category][i.name]||0)+amt;
+      const key = i.name?.toLowerCase().trim()||"";
+      if (!itemCountMap[key]) itemCountMap[key] = {count:0,total:0};
+      itemCountMap[key].count += Number(i.quantity)||1; itemCountMap[key].total += amt;
+    });
+    const catTotal = Object.values(catMap).reduce((s,v)=>s+v,0);
+    const catData = Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([category,amount])=>({
+      category, amount, pct: catTotal>0?Math.round((amount/catTotal)*100):0,
+      topItems: Object.entries(itemMap[category]||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([name,amt])=>({name,amount:amt})),
+    }));
+    setCategorySpend(catData);
+    setTopPurchased(Object.entries(itemCountMap).sort((a,b)=>b[1].count-a[1].count).slice(0,8)
+      .map(([name,v])=>({name:name.charAt(0).toUpperCase()+name.slice(1),count:v.count,total:v.total})));
+
+    const expDates = expenses.map((e:any)=>new Date(e.purchase_date).getTime());
+    const midTs = (Math.min(...expDates)+Math.max(...expDates))/2;
+    const prevExpSet = new Set(expenses.filter((e:any)=>new Date(e.purchase_date).getTime()<midTs).map((e:any)=>e.id));
+    const currExpSet = new Set(expenses.filter((e:any)=>new Date(e.purchase_date).getTime()>=midTs).map((e:any)=>e.id));
+    const prevCatMap: Record<string,number> = {}; const currCatMap: Record<string,number> = {};
+    items.forEach((i:any) => {
+      const amt = Number(i.price)*Number(i.quantity);
+      if (prevExpSet.has(i.expense_id)) prevCatMap[i.category] = (prevCatMap[i.category]||0)+amt;
+      if (currExpSet.has(i.expense_id)) currCatMap[i.category] = (currCatMap[i.category]||0)+amt;
+    });
+    const allCats = [...new Set([...Object.keys(prevCatMap),...Object.keys(currCatMap)])];
+    setCatTrend(allCats.map(cat=>({category:cat,current:currCatMap[cat]||0,prev:prevCatMap[cat]||0,
+      pct:prevCatMap[cat]>0?Math.round(((currCatMap[cat]||0)-(prevCatMap[cat]||0))/(prevCatMap[cat]||1)*100):0}))
+      .filter(t=>t.prev>0).sort((a,b)=>Math.abs(b.pct)-Math.abs(a.pct)).slice(0,6));
+
+    const twoWeeksAgo = new Date(Date.now()-14*24*60*60*1000).toISOString().split("T")[0];
+    const saved = rawDeals.filter(i=>i.regular_price!=null).reduce((s:number,i:any)=>{const d=Number(i.regular_price)-Number(i.price);return s+(d>0?d:0);},0);
+    setTotalSaved(saved);
+    const recentDeals = rawDeals.filter((i:any)=>i.created_at>=twoWeeksAgo);
+    const seen = new Set<string>(); const opps: SavingsOpp[] = [];
+    recentDeals.forEach((deal:any) => {
+      if (!deal.name) return;
+      const dealKey = deal.name.toLowerCase().trim();
+      if (seen.has(dealKey)) return;
+      const dealWords = dealKey.split(" ").filter((w:string)=>w.length>3);
+      const match = Object.entries(itemCountMap).find(([key]) => {
+        if (key===dealKey) return true;
+        const itemWords = key.split(" ").filter(w=>w.length>3);
+        return dealWords.some((w:string)=>itemWords.includes(w));
+      });
+      if (match) {
+        const yourAvg = match[1].total/Math.max(match[1].count,1);
+        const dealPrice = Number(deal.price);
+        if (dealPrice < yourAvg*0.9 && yourAvg > 0) { seen.add(dealKey); opps.push({name:deal.name,dealPrice,yourAvg,savings:yourAvg-dealPrice}); }
+      }
+    });
+    setSavingsOpps(opps.sort((a,b)=>b.savings-a.savings).slice(0,5));
+
+    const chips: {icon:string;text:string;color:string}[] = [];
+    if (catData.length>0) chips.push({icon:"🎯",text:`${catData[0].category} is ${catData[0].pct}% of your spend`,color:"#FF9F0A"});
+    const cheapestDay = Object.entries(dayMap).filter(([,v])=>v>0).sort((a,b)=>a[1]-b[1])[0];
+    if (cheapestDay) chips.push({icon:"📅",text:`${cheapestDay[0]} is your cheapest shopping day`,color:"#30D158"});
+    if (storeData.length>0) { const best=[...storeData].sort((a,b)=>a.avgPerVisit-b.avgPerVisit)[0]; chips.push({icon:"🏪",text:`${best.store} best value at ${fmt(best.avgPerVisit)}/visit`,color:"#0A84FF"}); }
+    if (monthlyData.length>=2) { const last=monthlyData[monthlyData.length-1].amount,prev=monthlyData[monthlyData.length-2].amount,pct=prev>0?Math.round((Math.abs(last-prev)/prev)*100):0; if(pct>0) chips.push({icon:last<prev?"📉":"📈",text:`Spending ${last<prev?"down":"up"} ${pct}% vs last month`,color:last<prev?"#30D158":"#FF3B30"}); }
+    setInsights(chips);
+  }, [rawExpenses, rawItems, rawDeals, filterStore, filterCat, fmt]);
 
   const maxMonthly = Math.max(...monthlySpend.map(m=>m.amount),1);
   const maxDay     = Math.max(...daySpend.map(d=>d.amount),1);
@@ -264,19 +275,47 @@ export default function AnalyticsPage() {
     <AnalyticsTemplate>
 
       {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-        <div>
-          <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>Analytics</h1>
-          <p style={{fontSize:13,color:"var(--text2)",marginTop:3}}>Your spending insights</p>
-        </div>
-        <div style={{display:"flex",background:"var(--surf)",borderRadius:10,padding:2,gap:1,boxShadow:"var(--shadow)"}}>
-          {PRESETS.map(p=>(
-            <button key={p.m} onClick={()=>setMonths(p.m)}
-              style={{padding:"7px 14px",borderRadius:8,border:"none",fontSize:12,fontWeight:600,cursor:"pointer",
-                background:months===p.m?"#FF9F0A":"transparent",color:months===p.m?"#fff":"var(--text2)",transition:"all 0.15s"}}>
-              {p.l}
+      <div style={{marginBottom:14}}>
+        <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>Analytics</h1>
+        <p style={{fontSize:13,color:"var(--text2)",marginTop:3}}>Your spending insights</p>
+      </div>
+
+      {/* Date presets */}
+      <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10,paddingBottom:2}}>
+        {PRESETS.map(p=>{
+          const active = p.days===-1 ? !dateFrom&&!dateTo : (() => {
+            if (!dateFrom) return false;
+            const from = new Date(); from.setDate(from.getDate()-p.days);
+            return dateFrom === from.toISOString().split("T")[0];
+          })();
+          return (
+            <button key={p.label} onClick={()=>applyPreset(p.days)}
+              style={{padding:"6px 14px",borderRadius:20,fontSize:12,fontWeight:600,border:"none",
+                background:active?"#FF9F0A":"var(--surf)",color:active?"#fff":"var(--text2)",cursor:"pointer",flexShrink:0,boxShadow:"var(--shadow)"}}>
+              {p.label}
             </button>
-          ))}
+          );
+        })}
+        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+          style={{background:"var(--surf)",border:"none",borderRadius:10,padding:"6px 10px",fontSize:12,color:"var(--text)",outline:"none",flexShrink:0,boxShadow:"var(--shadow)"}}/>
+        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+          style={{background:"var(--surf)",border:"none",borderRadius:10,padding:"6px 10px",fontSize:12,color:"var(--text)",outline:"none",flexShrink:0,boxShadow:"var(--shadow)"}}/>
+      </div>
+
+      {/* Store + category filters */}
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap" as const}}>
+        <select value={filterStore} onChange={e=>setFilterStore(e.target.value)}
+          style={{flex:1,minWidth:140,background:"var(--surf)",border:"none",borderRadius:10,padding:"9px 12px",fontSize:13,color:"var(--text)",outline:"none",boxShadow:"var(--shadow)"}}>
+          <option value="All">All Stores</option>
+          {allStores.map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={filterCat} onChange={e=>setFilterCat(e.target.value)}
+          style={{flex:1,minWidth:140,background:"var(--surf)",border:"none",borderRadius:10,padding:"9px 12px",fontSize:13,color:"var(--text)",outline:"none",boxShadow:"var(--shadow)"}}>
+          <option value="All">All Categories</option>
+          {allCategories.map(cat=><option key={cat} value={cat}>{cat}</option>)}
+        </select>
+        <div style={{fontSize:12,color:"var(--text3)",padding:"9px 12px",background:"var(--surf)",borderRadius:10,boxShadow:"var(--shadow)",whiteSpace:"nowrap"}}>
+          {totalBills} bill{totalBills!==1?"s":""}
         </div>
       </div>
 

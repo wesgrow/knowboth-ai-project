@@ -7,11 +7,12 @@ interface PantryItem { id:string;name:string;price:number;unit:string;store:stri
 interface User { name:string;avatar:string;zip:string;city:string;currency:string;theme:"dark"|"light"|"auto";points:number; }
 
 interface AppStore {
-  user:User|null; cart:CartItem[]; pantry:PantryItem[]; radius:number;
+  user:User|null; cart:CartItem[]; pantry:PantryItem[]; radius:number; monthly_budget:number|undefined;
   setUser:(u:User)=>void;
   updateLocation:(zip:string,city:string)=>void;
   updateRadius:(r:number)=>void;
   updateTheme:(t:"dark"|"light"|"auto")=>void;
+  updateBudget:(b:number|undefined)=>void;
   setCart:(items:CartItem[])=>void;
   addToCart:(item:Omit<CartItem,"qty"|"purchased">, qty?:number, notes?:string)=>void;
   addCartItemManual:(item:{name:string;store:string;store_id?:string;price:number;qty:number;category:string;notes?:string})=>void;
@@ -28,11 +29,12 @@ interface AppStore {
 }
 
 export const useAppStore = create<AppStore>()(persist((set,get)=>({
-  user:null, cart:[], pantry:[], radius:25,
+  user:null, cart:[], pantry:[], radius:25, monthly_budget:undefined,
   setUser:(u)=>set({user:u}),
   updateLocation:(zip,city)=>set(s=>({user:s.user?{...s.user,zip,city}:null})),
   updateRadius:(r)=>set({radius:r}),
   updateTheme:(t)=>set(s=>({user:s.user?{...s.user,theme:t}:null})),
+  updateBudget:(b)=>set({monthly_budget:b}),
   setCart:(items)=>set({cart:items}),
   addToCart:(item,qty=1,notes)=>{const{cart}=get();if(cart.find(i=>i.id===item.id))return;set({cart:[...cart,{...item,qty:Math.max(0.01,qty),purchased:false,notes:notes||item.notes}]});},
   addCartItemManual:(item)=>{const id=`m_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;set(s=>({cart:[...s.cart,{id,name:item.name,price:item.price,unit:"ea",store:item.store,store_slug:"",store_id:item.store_id,category:item.category,icon:"🛒",qty:item.qty,purchased:false,notes:item.notes,manually_added:true}]}));},
@@ -59,5 +61,5 @@ export const useAppStore = create<AppStore>()(persist((set,get)=>({
   clearUser:()=>set({user:null}),
 }),{
   name:"knowboth-v1",
-  partialize:(state)=>({ cart:state.cart, pantry:state.pantry, radius:state.radius }),
+  partialize:(state)=>({ cart:state.cart, pantry:state.pantry, radius:state.radius, monthly_budget:state.monthly_budget }),
 }));

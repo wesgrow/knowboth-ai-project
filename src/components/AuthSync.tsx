@@ -28,18 +28,21 @@ async function syncUserProfile(session: any) {
   }
 
   return {
-    name: profile?.name || firstName,
-    avatar: profile?.avatar || "🧑‍🍳",
-    currency: profile?.currency || "USD",
-    city: profile?.city || "DFW",
-    zip: profile?.zip || "75074",
-    theme: "light" as const,
-    points: profile?.points || 0,
+    profile: {
+      name: profile?.name || firstName,
+      avatar: profile?.avatar || "🧑‍🍳",
+      currency: profile?.currency || "USD",
+      city: profile?.city || "DFW",
+      zip: profile?.zip || "75074",
+      theme: "light" as const,
+      points: profile?.points || 0,
+    },
+    monthly_budget: profile?.monthly_budget != null ? Number(profile.monthly_budget) : undefined,
   };
 }
 
 export function AuthSync() {
-  const { setUser, clearUser, setCart } = useAppStore();
+  const { setUser, clearUser, setCart, updateBudget } = useAppStore();
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Subscribe to cart changes — debounce-save to DB
@@ -62,8 +65,9 @@ export function AuthSync() {
   useEffect(() => {
     supabaseAuth.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
-        const profile = await syncUserProfile(session);
+        const { profile, monthly_budget } = await syncUserProfile(session);
         setUser(profile);
+        if (monthly_budget !== undefined) updateBudget(monthly_budget);
         const dbCart = await loadUserCart();
         setCart(dbCart);
       }
@@ -71,8 +75,9 @@ export function AuthSync() {
 
     const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (event, session) => {
       if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-        const profile = await syncUserProfile(session);
+        const { profile, monthly_budget } = await syncUserProfile(session);
         setUser(profile);
+        if (monthly_budget !== undefined) updateBudget(monthly_budget);
         if (event === "SIGNED_IN") {
           const dbCart = await loadUserCart();
           setCart(dbCart);
