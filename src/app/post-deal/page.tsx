@@ -6,7 +6,7 @@ import { BottomSheet } from "@/ui";
 import toast from "react-hot-toast";
 
 const CATS = ["Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household","Other"];
-const UNITS = ["bag","lb","oz","kg","ea","pack","box","bottle","jar","bunch","dozen","gallon","liter","5 for","7 for","10 for"];
+const UNITS = ["bag","lb","oz","kg","ea","pack","box","bottle","jar","bunch","dozen","gallon","liter","2 for","3 for","4 for","5 for","6 for","7 for","10 for"];
 const VALID_CATS = ["Vegetables","Fruits","Dairy","Rice & Grains","Lentils & Dals","Spices","Snacks","Beverages","Oils & Ghee","Frozen","Bakery","Meat & Fish","Household","Other"];
 type Step = "upload"|"review"|"store"|"confirm";
 
@@ -72,7 +72,6 @@ export default function PostDealPage() {
   const [saleStart, setSaleStart] = useState(localDate);
   const [saleEnd, setSaleEnd] = useState("");
   const [publishing, setPublishing] = useState(false);
-  const [duplicateWarning, setDuplicateWarning] = useState<{skippedItems:DealItem[];toPublish:DealItem[]}|null>(null);
   const [editingId, setEditingId] = useState<string|null>(null);
   const [showFlyer, setShowFlyer] = useState(true);
   const [zoom, setZoom] = useState(1);
@@ -392,10 +391,8 @@ export default function PostDealPage() {
 
   async function doPublish(itemsToPublish: DealItem[]) {
     if(!selectedBrand||itemsToPublish.length===0) throw new Error("Nothing to publish");
-    console.log("[PostDeal] doPublish: start", { brand: selectedBrand, itemCount: itemsToPublish.length, locationMode, selectedLocs, saleStart, saleEnd });
 
     const{data:{session}}=await supabaseAuth.auth.getSession();
-    console.log("[PostDeal] doPublish: session", { userId: session?.user?.id, email: session?.user?.email });
     if(!session?.user?.id) throw new Error("You must be signed in to post deals");
 
     const locIds: (string|null)[] = locationMode==="specific"&&selectedLocs.length>0
@@ -411,24 +408,37 @@ export default function PostDealPage() {
     }));
 
     await Promise.all(locIds.map(async(locId)=>{
-      const dealPayload:any={
-        brand_id:selectedBrand!.id, posted_by:session.user.id, status:"approved",
-        applies_to_all_locations:locationMode==="all",
-        sale_start:saleStart, sale_end:saleEnd||null,
-      };
-      if(locId) dealPayload.location_id=locId;
-      console.log("[PostDeal] doPublish: inserting deal", dealPayload);
-      const{data:deal,error:de}=await timedRetry(()=>
-        supabase.from("deals").insert(dealPayload).select("id").single()
-      );
-      console.log("[PostDeal] doPublish: deal insert result", { deal, error: de });
-      if(de||!deal?.id) throw new Error(de?.message||"Failed to create deal");
+      // Find existing deal for this brand+date+location, or create one
+      const{data:existing}=await timedRetry(()=>{
+        const q=supabase.from("deals").select("id")
+          .eq("brand_id",selectedBrand!.id)
+          .eq("sale_start",saleStart)
+          .eq("applies_to_all_locations",locationMode==="all");
+        return locId?(q as any).eq("location_id",locId).limit(1):(q as any).is("location_id",null).limit(1);
+      }) as {data:{id:string}[]|null};
 
-      console.log("[PostDeal] doPublish: inserting", itemRows.length, "deal_items for deal", deal.id);
+      let dealId: string;
+      if(existing&&existing.length>0){
+        dealId=existing[0].id;
+      } else {
+        const dealPayload:any={
+          brand_id:selectedBrand!.id, posted_by:session.user.id, status:"approved",
+          applies_to_all_locations:locationMode==="all",
+          sale_start:saleStart, sale_end:saleEnd||null,
+        };
+        if(locId) dealPayload.location_id=locId;
+        const{data:deal,error:de}=await timedRetry(()=>
+          supabase.from("deals").insert(dealPayload).select("id").single()
+        );
+        if(de||!deal?.id) throw new Error(de?.message||"Failed to create deal");
+        dealId=deal.id;
+      }
+
+      // Upsert items — existing (deal_id + normalized_name) are silently skipped
       const{error:ie}=await timedRetry(()=>
-        supabase.from("deal_items").insert(itemRows.map(r=>({...r,deal_id:deal.id})))
+        supabase.from("deal_items")
+          .upsert(itemRows.map(r=>({...r,deal_id:dealId})),{onConflict:"deal_id,normalized_name",ignoreDuplicates:true})
       );
-      console.log("[PostDeal] doPublish: deal_items insert result", { error: ie });
       if(ie) throw new Error(ie.message);
     }));
 
@@ -448,56 +458,12 @@ export default function PostDealPage() {
     let connectingToast: string|undefined;
     const connectingTimer = setTimeout(()=>{ connectingToast=toast.loading("Connecting to server...",{duration:300000}); },4000);
     try{
-      // Dup check — short timeout (10s, 1 attempt) so a cold DB doesn't block publishing
-      console.log("[PostDeal] publish: checking for duplicates", { brand_id: selectedBrand!.id, sale_start: saleStart });
-      let itemsToPublish=items;
-      try {
-        const{data:existingDeals}=await timedRetry(()=>{
-          let q=supabase.from("deals").select("id").eq("brand_id",selectedBrand!.id).eq("sale_start",saleStart);
-          if(locationMode==="specific"&&selectedLocs.length===1) q=(q as any).eq("location_id",selectedLocs[0]);
-          return q;
-        }, 10000, 1) as {data:any[]|null};
-        console.log("[PostDeal] publish: existing deals found", { count: existingDeals?.length });
-        if(existingDeals&&existingDeals.length>0){
-          const dealIds=existingDeals.map((d:any)=>d.id);
-          const{data:existingDealItems}=await timedRetry(()=>
-            supabase.from("deal_items").select("normalized_name,price").in("deal_id",dealIds)
-          , 10000, 1) as {data:any[]|null};
-          if(existingDealItems&&existingDealItems.length>0){
-            const dupSet=new Set(existingDealItems.map((i:any)=>`${i.normalized_name}|${i.price}`));
-            const fresh=items.filter(i=>!dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
-            const dupes=items.filter(i=>dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
-            console.log("[PostDeal] publish: dup check", { duplicates: dupes.length, fresh: fresh.length });
-            if(dupes.length>0){
-              setDuplicateWarning({skippedItems:dupes,toPublish:fresh});
-              return;
-            }
-            itemsToPublish=fresh;
-          }
-        }
-      } catch {
-        console.warn("[PostDeal] publish: dup check skipped (timeout/error) — proceeding with all items");
-      }
-      await doPublish(itemsToPublish);
+      await doPublish(items);
     }catch(e:any){
-      console.error("[PostDeal] publish error:", e);
       toast.error(e.message||"Failed to publish.");
     }finally{
       clearTimeout(connectingTimer);
       if(connectingToast) toast.dismiss(connectingToast);
-      setPublishing(false);
-    }
-  }
-
-  async function publishResolved(itemsToPublish: DealItem[]) {
-    setDuplicateWarning(null);
-    setPublishing(true);
-    try{
-      await doPublish(itemsToPublish);
-    }catch(e:any){
-      console.error("Publish error:",e);
-      toast.error(e.message||"Failed to publish.");
-    }finally{
       setPublishing(false);
     }
   }
@@ -879,52 +845,13 @@ export default function PostDealPage() {
                   </div>
                 </div>
 
-                {/* Duplicate warning card */}
-                {duplicateWarning&&(
-                  <div style={{background:"rgba(255,159,10,0.06)",border:"1.5px solid rgba(255,159,10,0.35)",borderRadius:14,padding:"16px",marginBottom:12}}>
-                    <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:12}}>
-                      <span style={{fontSize:20,flexShrink:0}}>⚠️</span>
-                      <div>
-                        <div style={{fontSize:14,fontWeight:700,color:"#FF9F0A",marginBottom:3}}>
-                          {duplicateWarning.skippedItems.length} item{duplicateWarning.skippedItems.length>1?"s":""} already posted for {selectedBrand?.name} on {saleStart}
-                        </div>
-                        <div style={{fontSize:12,color:"var(--text2)"}}>
-                          {duplicateWarning.toPublish.length>0
-                            ?`Skip the duplicates and publish the remaining ${duplicateWarning.toPublish.length} new item${duplicateWarning.toPublish.length>1?"s":""}?`
-                            :"All items already exist — nothing new to publish."}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{display:"flex",flexDirection:"column" as const,gap:4,marginBottom:12,maxHeight:120,overflowY:"auto"}}>
-                      {duplicateWarning.skippedItems.map((item,i)=>(
-                        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"rgba(255,159,10,0.08)",borderRadius:8}}>
-                          <span style={{fontSize:12,color:"var(--text)",fontWeight:500}}>{item.name}</span>
-                          <span style={{fontSize:12,color:"#FF9F0A",fontWeight:700}}>${item.price.toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{display:"flex",gap:8}}>
-                      <button onClick={()=>setDuplicateWarning(null)}
-                        style={{flex:1,padding:"10px",background:"var(--bg)",border:"none",borderRadius:10,fontSize:13,fontWeight:600,color:"var(--text2)",cursor:"pointer"}}>
-                        ← Cancel
-                      </button>
-                      {duplicateWarning.toPublish.length>0&&(
-                        <button onClick={()=>publishResolved(duplicateWarning.toPublish)} disabled={publishing}
-                          style={{flex:2,padding:"10px",background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:10,fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",opacity:publishing?0.7:1}}>
-                          {publishing?"Publishing...":` Skip & Publish ${duplicateWarning.toPublish.length} New`}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {!duplicateWarning&&<div style={{display:"flex",gap:8}}>
+                <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>setStep("store")} style={{flex:1,padding:14,background:"var(--surf)",border:"none",borderRadius:12,fontSize:14,fontWeight:600,color:"var(--text2)",cursor:"pointer",boxShadow:"var(--shadow)"}}>← Edit</button>
                   <button onClick={publish} disabled={publishing}
                     style={{flex:2,padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:14,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:publishing?0.7:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
                     {publishing?"Publishing...":"🚀 Publish Live"}
                   </button>
-                </div>}
+                </div>
               </div>
             )}
 

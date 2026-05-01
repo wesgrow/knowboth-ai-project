@@ -40,7 +40,7 @@ function DealsContent() {
   const [cat, setCat] = useState("All");
   const [storeFilter, setStoreFilter] = useState("All");
   const [sort, setSort] = useState("newest");
-  const [maxPrice, setMaxPrice] = useState(50);
+  const [maxPrice, setMaxPrice] = useState(200);
   const [onSale, setOnSale] = useState(false);
   const [expiringSoon, setExpiringSoon] = useState(false);
   const [freshToday, setFreshToday] = useState(false);
@@ -164,8 +164,8 @@ function DealsContent() {
   function src(s: string | null, fromPH?: boolean) { return fromPH ? "🧾 Community" : s === "receipt" ? "🧾 Receipt" : s === "flyer" ? "📄 Flyer" : "✏️ Manual"; }
   function ago(ts: string) { const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000); if (m < 60) return `${m}m`; const h = Math.floor(m / 60); if (h < 24) return `${h}h`; return `${Math.floor(h / 24)}d`; }
 
-  const aF = [cat !== "All" && { l: cat, c: () => setCat("All") }, storeFilter !== "All" && { l: storeFilter, c: () => setStoreFilter("All") }, onSale && { l: "On Sale", c: () => setOnSale(false) }, expiringSoon && { l: "Expiring", c: () => setExpiringSoon(false) }, freshToday && { l: "Fresh", c: () => setFreshToday(false) }, maxPrice < 50 && { l: `<$${maxPrice}`, c: () => setMaxPrice(50) }].filter(Boolean) as { l: string; c: () => void }[];
-  function clrAll() { setCat("All"); setStoreFilter("All"); setOnSale(false); setExpiringSoon(false); setFreshToday(false); setMaxPrice(50); }
+  const aF = [cat !== "All" && { l: cat, c: () => setCat("All") }, storeFilter !== "All" && { l: storeFilter, c: () => setStoreFilter("All") }, onSale && { l: "On Sale", c: () => setOnSale(false) }, expiringSoon && { l: "Expiring", c: () => setExpiringSoon(false) }, freshToday && { l: "Fresh", c: () => setFreshToday(false) }, maxPrice < 200 && { l: `<$${maxPrice}`, c: () => setMaxPrice(200) }].filter(Boolean) as { l: string; c: () => void }[];
+  function clrAll() { setCat("All"); setStoreFilter("All"); setOnSale(false); setExpiringSoon(false); setFreshToday(false); setMaxPrice(200); }
 
   const dealIdFilter = params.get("deal_id");
 
@@ -178,7 +178,7 @@ function DealsContent() {
       if (search && !item.name?.toLowerCase().includes(search.toLowerCase())) drops.search++;
       if (cat !== "All" && item.category !== cat) drops.cat++;
       if (storeFilter !== "All" && item.brand?.name !== storeFilter) drops.store++;
-      if (item.price > maxPrice) drops.price++;
+      if (maxPrice < 200 && item.price > maxPrice) drops.price++;
     });
     console.log("[Deals] filter stats:", { total: items.length, drops, sale_ends: [...new Set(items.map((i:any)=>i.deal?.sale_end))] });
   }
@@ -195,7 +195,7 @@ function DealsContent() {
     if (onSale && !item.regular_price) return false;
     if (expiringSoon && (dl === null || dl > 3)) return false;
     if (freshToday && fr.level > 1) return false;
-    if (item.price > maxPrice) return false;
+    if (maxPrice < 200 && item.price > maxPrice) return false;
     return true;
   }).sort((a, b) => {
     // posted deals always before community prices
@@ -394,8 +394,8 @@ function DealsContent() {
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>{["All", ...stores].map(s => <button key={s} onClick={() => setStoreFilter(s)} style={{ padding: "6px 12px", borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "none", background: storeFilter === s ? "#FF9F0A" : "#F2F2F7", color: storeFilter === s ? "#fff" : "#1C1C1E" }}>{s}</button>)}</div>
                 </div>
                 <div style={{ padding: "12px 16px", borderBottom: "0.5px solid #F2F2F7" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 10, fontWeight: 600, color: "#AEAEB2", letterSpacing: 0.5, textTransform: "uppercase" as const }}>Price Range</span><span style={{ fontSize: 12, fontWeight: 600, color: "#FF9F0A" }}>Under ${maxPrice}{maxPrice === 50 ? "+" : " "}</span></div>
-                  <input type="range" min="1" max="50" value={maxPrice} onChange={e => setMaxPrice(Number(e.target.value))} style={{ width: "100%", accentColor: "#FF9F0A", cursor: "pointer" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 10, fontWeight: 600, color: "#AEAEB2", letterSpacing: 0.5, textTransform: "uppercase" as const }}>Price Range</span><span style={{ fontSize: 12, fontWeight: 600, color: "#FF9F0A" }}>{maxPrice >= 200 ? "No limit" : `Under $${maxPrice}`}</span></div>
+                  <input type="range" min="1" max="200" value={maxPrice} onChange={e => setMaxPrice(Number(e.target.value))} style={{ width: "100%", accentColor: "#FF9F0A", cursor: "pointer" }} />
                 </div>
                 <div style={{ padding: "12px 16px", borderBottom: "0.5px solid #F2F2F7" }}>
                   <div style={{ display: "flex", flexDirection: "column" as const, gap: 12 }}>

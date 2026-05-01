@@ -47,7 +47,7 @@ function sanitizeItems(items: any[]): any[] {
       category: VALID_CATEGORIES.includes(item.category) ? item.category : "Other",
       notes: String(item.notes || "").trim().slice(0, 500),
     }))
-    .filter(item => item.name.length > 0 && item.price > 0);
+    .filter(item => item.name.length > 0);
 }
 
 function sanitizeLocations(locs: any[]): object[] {
@@ -165,9 +165,12 @@ Date rules:
 Item rules:
 - name = full product name with brand and size. Expand all abbreviations.
 - normalized_name = lowercase version of name
-- price = sale/deal price (required, must be > 0)
+- price = sale/deal price as a number (required, must be > 0)
 - regular_price = original price before sale (null if not shown)
-- unit = lb, kg, oz, bag, pack, box, bottle, bunch, ea
+- unit = one of: lb, kg, oz, bag, pack, box, bottle, jar, bunch, ea, gallon, liter, dozen
+  For BUNDLE pricing (e.g. "4 for $1", "3 for $5", "2 for $3"):
+    set price = the total bundle price (e.g. 1.00, 5.00, 3.00)
+    set unit  = "4 for", "3 for", "2 for" etc. (never set price to 0 or per-unit fraction)
 - Extract every item with a visible price
 - No trailing commas in JSON` });
 
