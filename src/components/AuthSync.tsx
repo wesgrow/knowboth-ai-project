@@ -1,8 +1,8 @@
 "use client";
-import { useEffect } from "react";
-import { supabase } from "@/lib/supabase";
-import { supabaseAuth } from "@/lib/supabase";
+import { useEffect, useRef } from "react";
+import { supabase, supabaseAuth } from "@/lib/supabase";
 import { useAppStore } from "@/lib/store";
+import { loadUserCart, saveUserCart } from "@/lib/cart";
 
 async function syncUserProfile(session: any) {
   const userId = session.user.id;
@@ -11,7 +11,6 @@ async function syncUserProfile(session: any) {
     session.user.email?.split("@")[0] || "User";
   const firstName = rawName.split(" ")[0];
 
-  // Try to get existing profile
   const { data: profile } = await supabase
     .from("user_profiles")
     .select("*")
@@ -19,7 +18,6 @@ async function syncUserProfile(session: any) {
     .single();
 
   if (!profile) {
-    // Create profile on first login
     await supabase.from("user_profiles").insert({
       user_id: userId,
       name: firstName,
@@ -41,13 +39,33 @@ async function syncUserProfile(session: any) {
 }
 
 export function AuthSync() {
-  const { setUser, clearUser } = useAppStore();
+  const { setUser, clearUser, setCart } = useAppStore();
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // Subscribe to cart changes — debounce-save to DB
+  useEffect(() => {
+    let prevCart = useAppStore.getState().cart;
+    const unsubscribe = useAppStore.subscribe((state) => {
+      if (state.cart !== prevCart) {
+        prevCart = state.cart;
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => saveUserCart(state.cart), 1500);
+      }
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(saveTimerRef.current);
+    };
+  }, []);
+
+  // Auth sync — load user profile + cart from DB on session
   useEffect(() => {
     supabaseAuth.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
         const profile = await syncUserProfile(session);
         setUser(profile);
+        const dbCart = await loadUserCart();
+        setCart(dbCart);
       }
     });
 
@@ -55,6 +73,10 @@ export function AuthSync() {
       if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
         const profile = await syncUserProfile(session);
         setUser(profile);
+        if (event === "SIGNED_IN") {
+          const dbCart = await loadUserCart();
+          setCart(dbCart);
+        }
       }
       if (event === "SIGNED_OUT") {
         clearUser();

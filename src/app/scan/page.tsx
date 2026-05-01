@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { supabase, supabaseAuth, timedRetry } from "@/lib/supabase";
+import { addPoints as dbAddPoints } from "@/lib/points";
 import { BottomSheet } from "@/ui";
 import toast from "react-hot-toast";
 
@@ -51,7 +52,7 @@ function computeConfidence(item: any): number {
 
 export default function ScanPage() {
   const router = useRouter();
-  const { addPoints, user, setUser } = useAppStore();
+  const { user, setUser } = useAppStore();
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File|null>(null);
   const [preview, setPreview] = useState<string|null>(null);
@@ -329,13 +330,9 @@ export default function ScanPage() {
       }
 
       const pts = 5+(items.length*2);
-      addPoints(pts);
-      if (userId) {
-        supabase.from("user_profiles").select("points").eq("user_id",userId).maybeSingle().then(({data:prof})=>{
-          const newPts = (prof?.points||0)+pts;
-          supabase.from("user_profiles").upsert({user_id:userId,points:newPts,updated_at:new Date().toISOString()},{onConflict:"user_id"}).then(()=>{ if(user) setUser({...user,points:newPts}); });
-        });
-      }
+      dbAddPoints(pts, "scan_bill").then(newPts => {
+        if (user && newPts > 0) setUser({...user, points: newPts});
+      });
 
       setSaved(true); setStep("confirm");
       toast.success(`✦ +${pts} pts · Bill saved!`);

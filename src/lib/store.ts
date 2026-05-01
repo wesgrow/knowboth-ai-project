@@ -12,6 +12,7 @@ interface AppStore {
   updateLocation:(zip:string,city:string)=>void;
   updateRadius:(r:number)=>void;
   updateTheme:(t:"dark"|"light"|"auto")=>void;
+  setCart:(items:CartItem[])=>void;
   addToCart:(item:Omit<CartItem,"qty"|"purchased">, qty?:number, notes?:string)=>void;
   addCartItemManual:(item:{name:string;store:string;store_id?:string;price:number;qty:number;category:string;notes?:string})=>void;
   removeFromCart:(id:string)=>void;
@@ -24,7 +25,6 @@ interface AppStore {
   removeFromPantry:(id:string)=>void;
   restockItem:(item:PantryItem)=>void;
   clearUser:()=>void;
-  addPoints:(pts:number)=>void;
 }
 
 export const useAppStore = create<AppStore>()(persist((set,get)=>({
@@ -33,6 +33,7 @@ export const useAppStore = create<AppStore>()(persist((set,get)=>({
   updateLocation:(zip,city)=>set(s=>({user:s.user?{...s.user,zip,city}:null})),
   updateRadius:(r)=>set({radius:r}),
   updateTheme:(t)=>set(s=>({user:s.user?{...s.user,theme:t}:null})),
+  setCart:(items)=>set({cart:items}),
   addToCart:(item,qty=1,notes)=>{const{cart}=get();if(cart.find(i=>i.id===item.id))return;set({cart:[...cart,{...item,qty:Math.max(0.01,qty),purchased:false,notes:notes||item.notes}]});},
   addCartItemManual:(item)=>{const id=`m_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;set(s=>({cart:[...s.cart,{id,name:item.name,price:item.price,unit:"ea",store:item.store,store_slug:"",store_id:item.store_id,category:item.category,icon:"🛒",qty:item.qty,purchased:false,notes:item.notes,manually_added:true}]}));},
   removeFromCart:(id)=>set(s=>({cart:s.cart.filter(i=>i.id!==id)})),
@@ -56,7 +57,6 @@ export const useAppStore = create<AppStore>()(persist((set,get)=>({
     else{set(s=>({cart:[...s.cart,{id:Date.now().toString(),name:item.name,price:item.price,unit:item.unit,store:item.store,store_slug:"",category:item.category,icon:item.icon,qty:1,purchased:false}]}));}
   },
   clearUser:()=>set({user:null}),
-  addPoints:(pts)=>set(s=>({user:s.user?{...s.user,points:(s.user.points||0)+pts}:null})),
 }),{
   name:"knowboth-v1",
   partialize:(state)=>({ cart:state.cart, pantry:state.pantry, radius:state.radius }),
