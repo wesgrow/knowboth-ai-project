@@ -26,6 +26,11 @@ interface Brand { id: string; name: string; slug: string; website?: string; phon
 interface Location { id: string; branch_name: string; address?: string; city: string; state?: string; zip: string; phone?: string; lat?: number; lng?: number; map_link?: string; }
 interface ExtractedLoc { address?: string; city: string; state?: string; zip?: string; phone?: string; }
 
+function localDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 function ConfidenceBadge({ score }: { score: number }) {
   const color = score >= 80 ? "#30D158" : score >= 60 ? "#FF9F0A" : "#FF3B30";
   const label = score >= 80 ? "High" : score >= 60 ? "Medium" : "Low";
@@ -64,7 +69,7 @@ export default function PostDealPage() {
   const [selectedBrand, setSelectedBrand] = useState<Brand|null>(null);
   const [locationMode, setLocationMode] = useState<"all"|"specific">("all");
   const [selectedLocs, setSelectedLocs] = useState<string[]>([]);
-  const [saleStart, setSaleStart] = useState(new Date().toISOString().split("T")[0]);
+  const [saleStart, setSaleStart] = useState(localDate);
   const [saleEnd, setSaleEnd] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<{skippedItems:DealItem[];toPublish:DealItem[]}|null>(null);
@@ -150,15 +155,18 @@ export default function PostDealPage() {
 
   async function autoMatchStore(storeName: string, storedLocs: ExtractedLoc[]) {
     if (!storeName.trim()) return;
+    console.log("[PostDeal] autoMatchStore:", { storeName, extractedLocs: storedLocs, availableBrands: brands.map(b=>b.name) });
     const match = brands.find(b => {
       const nb = norm(b.name), ns = norm(storeName);
       return nb === ns || nb.includes(ns) || ns.includes(nb);
     });
     if (match) {
+      console.log("[PostDeal] autoMatchStore: matched brand", match);
       setSelectedBrand(match);
       const dbLocs = await fetchLocations(match.id);
       if (storedLocs.length > 0) await matchAndApplyLocations(match.id, match.name, storedLocs, dbLocs);
     } else {
+      console.log("[PostDeal] autoMatchStore: no match found — showing Add Store sheet");
       setNewBrandName(storeName);
       if (storedLocs.length > 0) setPendingExtractedLocs(storedLocs);
     }
@@ -290,8 +298,10 @@ export default function PostDealPage() {
           setExtractProgress(`Extracting file ${i+1} of ${files.length}...`);
           const b64 = await toB64(files[i]);
           const body = { store:selectedBrand?.name||"", b64, mime:files[i].type };
+          console.log(`[PostDeal] extract: sending file ${i+1}/${files.length}`, { mime: files[i].type, size: files[i].size });
           const res = await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
           const data = await res.json();
+          console.log(`[PostDeal] extract: API response file ${i+1}`, { status: res.status, store_name: data.store_name, items_count: data.items?.length, sale_start: data.sale_start, sale_end: data.sale_end, error: data.error, store_locations: data.store_locations });
           if(data.error) { toast.error(`File ${i+1}: ${data.error}`); continue; }
           if(i===0) {
             if(data.store_name) { setExtractedStoreName(data.store_name); await autoMatchStore(data.store_name, data.store_locations||[]); }
@@ -319,8 +329,10 @@ export default function PostDealPage() {
       } else {
         setExtractProgress("Extracting from URL...");
         const body = { store:selectedBrand?.name||"", url };
+        console.log("[PostDeal] extract: sending URL", { url });
         const res = await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
         const data = await res.json();
+        console.log("[PostDeal] extract: API response URL", { status: res.status, store_name: data.store_name, items_count: data.items?.length, error: data.error });
         if(data.error) throw new Error(data.error);
         if(data.store_name) { setExtractedStoreName(data.store_name); await autoMatchStore(data.store_name, data.store_locations||[]); }
         if(data.sale_start) setSaleStart(data.sale_start);
@@ -378,13 +390,12 @@ export default function PostDealPage() {
 
   const normalizeStr=(s:string)=>s.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
 
-  function withPublishTimeout<T>(p: Promise<T>): Promise<T> {
-    return Promise.race([p, new Promise<never>((_,rej)=>setTimeout(()=>rej(new Error("Publish timed out — check your connection.")),30000))]);
-  }
-
   async function doPublish(itemsToPublish: DealItem[]) {
     if(!selectedBrand||itemsToPublish.length===0) throw new Error("Nothing to publish");
-    const{data:{session}}=await withPublishTimeout(supabaseAuth.auth.getSession());
+    console.log("[PostDeal] doPublish: start", { brand: selectedBrand, itemCount: itemsToPublish.length, locationMode, selectedLocs, saleStart, saleEnd });
+
+    const{data:{session}}=await supabaseAuth.auth.getSession();
+    console.log("[PostDeal] doPublish: session", { userId: session?.user?.id, email: session?.user?.email });
     if(!session?.user?.id) throw new Error("You must be signed in to post deals");
 
     const locIds: (string|null)[] = locationMode==="specific"&&selectedLocs.length>0
@@ -406,9 +417,18 @@ export default function PostDealPage() {
         sale_start:saleStart, sale_end:saleEnd||null,
       };
       if(locId) dealPayload.location_id=locId;
-      const{data:deal,error:de}=await supabase.from("deals").insert(dealPayload).select("id").single();
+      console.log("[PostDeal] doPublish: inserting deal", dealPayload);
+      const{data:deal,error:de}=await timedRetry(()=>
+        supabase.from("deals").insert(dealPayload).select("id").single()
+      );
+      console.log("[PostDeal] doPublish: deal insert result", { deal, error: de });
       if(de||!deal?.id) throw new Error(de?.message||"Failed to create deal");
-      const{error:ie}=await supabase.from("deal_items").insert(itemRows.map(r=>({...r,deal_id:deal.id})));
+
+      console.log("[PostDeal] doPublish: inserting", itemRows.length, "deal_items for deal", deal.id);
+      const{error:ie}=await timedRetry(()=>
+        supabase.from("deal_items").insert(itemRows.map(r=>({...r,deal_id:deal.id})))
+      );
+      console.log("[PostDeal] doPublish: deal_items insert result", { error: ie });
       if(ie) throw new Error(ie.message);
     }));
 
@@ -425,30 +445,46 @@ export default function PostDealPage() {
     const noPrice=items.filter(i=>i.price<=0);
     if(noPrice.length>0){toast.error(`${noPrice.length} items have $0 price`);setEditingId(noPrice[0].id);setStep("review");return;}
     setPublishing(true);
+    let connectingToast: string|undefined;
+    const connectingTimer = setTimeout(()=>{ connectingToast=toast.loading("Connecting to server...",{duration:300000}); },4000);
     try{
-      let query=supabase.from("deals").select("id").eq("brand_id",selectedBrand.id).eq("sale_start",saleStart);
-      if(locationMode==="specific"&&selectedLocs.length===1) query=(query as any).eq("location_id",selectedLocs[0]);
-      const{data:existingDeals}=await withPublishTimeout(query as any) as {data:any[]|null};
+      // Dup check — short timeout (10s, 1 attempt) so a cold DB doesn't block publishing
+      console.log("[PostDeal] publish: checking for duplicates", { brand_id: selectedBrand!.id, sale_start: saleStart });
       let itemsToPublish=items;
-      if(existingDeals&&existingDeals.length>0){
-        const dealIds=existingDeals.map((d:any)=>d.id);
-        const{data:existingDealItems}=await supabase.from("deal_items").select("normalized_name,price").in("deal_id",dealIds);
-        if(existingDealItems&&existingDealItems.length>0){
-          const dupSet=new Set(existingDealItems.map((i:any)=>`${i.normalized_name}|${i.price}`));
-          const fresh=items.filter(i=>!dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
-          const dupes=items.filter(i=>dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
-          if(dupes.length>0){
-            setDuplicateWarning({skippedItems:dupes,toPublish:fresh});
-            return;
+      try {
+        const{data:existingDeals}=await timedRetry(()=>{
+          let q=supabase.from("deals").select("id").eq("brand_id",selectedBrand!.id).eq("sale_start",saleStart);
+          if(locationMode==="specific"&&selectedLocs.length===1) q=(q as any).eq("location_id",selectedLocs[0]);
+          return q;
+        }, 10000, 1) as {data:any[]|null};
+        console.log("[PostDeal] publish: existing deals found", { count: existingDeals?.length });
+        if(existingDeals&&existingDeals.length>0){
+          const dealIds=existingDeals.map((d:any)=>d.id);
+          const{data:existingDealItems}=await timedRetry(()=>
+            supabase.from("deal_items").select("normalized_name,price").in("deal_id",dealIds)
+          , 10000, 1) as {data:any[]|null};
+          if(existingDealItems&&existingDealItems.length>0){
+            const dupSet=new Set(existingDealItems.map((i:any)=>`${i.normalized_name}|${i.price}`));
+            const fresh=items.filter(i=>!dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
+            const dupes=items.filter(i=>dupSet.has(`${normalizeStr(i.normalized_name||i.name)}|${i.price}`));
+            console.log("[PostDeal] publish: dup check", { duplicates: dupes.length, fresh: fresh.length });
+            if(dupes.length>0){
+              setDuplicateWarning({skippedItems:dupes,toPublish:fresh});
+              return;
+            }
+            itemsToPublish=fresh;
           }
-          itemsToPublish=fresh;
         }
+      } catch {
+        console.warn("[PostDeal] publish: dup check skipped (timeout/error) — proceeding with all items");
       }
-      await withPublishTimeout(doPublish(itemsToPublish));
+      await doPublish(itemsToPublish);
     }catch(e:any){
-      console.error("Publish error:",e);
+      console.error("[PostDeal] publish error:", e);
       toast.error(e.message||"Failed to publish.");
     }finally{
+      clearTimeout(connectingTimer);
+      if(connectingToast) toast.dismiss(connectingToast);
       setPublishing(false);
     }
   }
@@ -457,7 +493,7 @@ export default function PostDealPage() {
     setDuplicateWarning(null);
     setPublishing(true);
     try{
-      await withPublishTimeout(doPublish(itemsToPublish));
+      await doPublish(itemsToPublish);
     }catch(e:any){
       console.error("Publish error:",e);
       toast.error(e.message||"Failed to publish.");
@@ -776,12 +812,23 @@ export default function PostDealPage() {
                       {saleEnd&&extractedStoreName&&<span style={{fontSize:9,fontWeight:700,color:"#30D158",background:"rgba(48,209,88,0.1)",borderRadius:20,padding:"1px 6px"}}>🤖 auto</span>}
                     </div>
                     <input type="date" style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 12px",fontSize:16,color:"var(--text)",outline:"none"}} value={saleEnd} onChange={e=>setSaleEnd(e.target.value)}/>
+                    {saleEnd && saleEnd < localDate() && (
+                      <div style={{marginTop:6,fontSize:11,color:"#FF3B30",fontWeight:600}}>
+                        ⚠️ This date is in the past — please update it or clear the field before publishing.
+                      </div>
+                    )}
                   </div>
                 </div>
-                <button onClick={()=>setStep("confirm")} disabled={!selectedBrand||(locationMode==="specific"&&selectedLocs.length===0)}
-                  style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:14,fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",opacity:!selectedBrand?0.5:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
-                  Continue → Review & Publish
-                </button>
+                {(()=>{
+                  const pastSaleEnd = !!(saleEnd && saleEnd < localDate());
+                  const disabled = !selectedBrand || (locationMode==="specific"&&selectedLocs.length===0) || pastSaleEnd;
+                  return (
+                    <button onClick={()=>setStep("confirm")} disabled={disabled}
+                      style={{width:"100%",padding:14,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:14,fontSize:15,fontWeight:700,color:"#fff",cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
+                      {pastSaleEnd?"Fix sale end date first":"Continue → Review & Publish"}
+                    </button>
+                  );
+                })()}
               </div>
             )}
 

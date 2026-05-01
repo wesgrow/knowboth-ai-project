@@ -11,7 +11,10 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
-  if (e.request.url.includes("supabase") || e.request.url.includes("anthropic")) return;
+  const url = e.request.url;
+  // Only cache http/https — skip chrome-extension://, data:, etc.
+  if (!url.startsWith("http")) return;
+  if (url.includes("supabase") || url.includes("anthropic")) return;
   e.respondWith(
     fetch(e.request)
       .then(res => {

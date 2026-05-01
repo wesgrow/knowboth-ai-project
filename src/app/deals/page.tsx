@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase, timedRetry } from "@/lib/supabase";
 import { useAppStore } from "@/lib/store";
 import { getFreshness, STORE_COLORS } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -109,40 +109,55 @@ function DealsContent() {
 
   async function fetchDeals() {
     setLoading(true);
-    const { data: dealRows } = await supabase.from("deals").select("id,sale_end,brand_id").eq("status","approved");
-    if (!dealRows?.length) { setItems([]); setLoading(false); return; }
-    const dealIds  = dealRows.map((d:any) => d.id);
-    const brandIds = [...new Set(dealRows.map((d:any) => d.brand_id).filter(Boolean))] as string[];
-    const since30  = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+    try {
+      const { data: dealRows, error: e1 } = await timedRetry(() =>
+        supabase.from("deals").select("id,sale_end,brand_id").eq("status","approved")
+      ) as any;
+      if (e1) throw new Error(`Deals: ${e1.message}`);
+      if (!dealRows?.length) { setItems([]); return; }
 
-    const { data: brands } = await supabase.from("brands").select("id,name,slug").in("id", brandIds);
-    const { data: dealItems } = await supabase.from("deal_items").select("id,deal_id,name,normalized_name,price,regular_price,unit,category,savings_pct,created_at,source").in("deal_id", dealIds).order("created_at",{ascending:false});
-    const { data: expItems } = await supabase.from("expense_items").select("name,price");
-    if (!dealItems) { setLoading(false); return; }
+      const dealIds  = (dealRows as any[]).map((d:any) => d.id);
+      const brandIds = [...new Set((dealRows as any[]).map((d:any) => d.brand_id).filter(Boolean))] as string[];
+      const since30  = new Date(Date.now() - 30*24*60*60*1000).toISOString();
 
-    const bMap: Record<string,any> = {}; (brands||[]).forEach((b:any) => { bMap[b.id] = b; });
-    const dMap: Record<string,any> = {}; dealRows.forEach((d:any) => { dMap[d.id] = d; });
-    const merged = dealItems.map((i:any) => ({ ...i, deal: dMap[i.deal_id], brand: bMap[dMap[i.deal_id]?.brand_id] }));
+      const [r1, r2, r3] = await Promise.all([
+        timedRetry(() => supabase.from("brands").select("id,name,slug").in("id", brandIds)),
+        timedRetry(() => supabase.from("deal_items").select("id,deal_id,name,normalized_name,price,regular_price,unit,category,savings_pct,created_at,source").in("deal_id", dealIds).order("created_at",{ascending:false})),
+        timedRetry(() => supabase.from("expense_items").select("name,price")),
+      ]) as any[];
+      if (r1.error) throw new Error(`Brands: ${r1.error.message}`);
+      if (r2.error) throw new Error(`Deal items: ${r2.error.message}`);
+      const brands = r1.data, dealItems = r2.data, expItems = r3.data;
 
-    const verifiedSet = new Set((expItems||[]).map((e:any) => `${e.name?.toLowerCase().trim()}|${Number(e.price).toFixed(2)}`));
-    const normalizedNames = [...new Set(merged.map((i:any) => i.normalized_name).filter(Boolean))] as string[];
+      if (!dealItems) return;
 
-    // Sparklines — only if we have names
-    const { data: phRows } = normalizedNames.length > 0
-      ? await supabase.from("price_history").select("normalized_name,price,recorded_at").in("normalized_name", normalizedNames).gte("recorded_at", since30).order("recorded_at",{ascending:true})
-      : { data: [] };;
+      const bMap: Record<string,any> = {}; (brands||[]).forEach((b:any) => { bMap[b.id] = b; });
+      const dMap: Record<string,any> = {}; dealRows.forEach((d:any) => { dMap[d.id] = d; });
+      const merged = dealItems.map((i:any) => ({ ...i, deal: dMap[i.deal_id], brand: bMap[dMap[i.deal_id]?.brand_id] }));
 
-    const sparkMap: Record<string,number[]> = {};
-    (phRows||[]).forEach((r:any) => { if (!sparkMap[r.normalized_name]) sparkMap[r.normalized_name] = []; sparkMap[r.normalized_name].push(Number(r.price)); });
+      const verifiedSet = new Set((expItems||[]).map((e:any) => `${e.name?.toLowerCase().trim()}|${Number(e.price).toFixed(2)}`));
+      const normalizedNames = [...new Set(merged.map((i:any) => i.normalized_name).filter(Boolean))] as string[];
 
-    const withSpark = merged.map((i:any) => ({
-      ...i,
-      verified: verifiedSet.has(`${i.name?.toLowerCase().trim()}|${Number(i.price).toFixed(2)}`),
-      sparkline: sparkMap[i.normalized_name] || [],
-    }));
-    setItems(withSpark);
-    setStores([...new Set(withSpark.map((i: any) => i.brand?.name).filter(Boolean))] as string[]);
-    setLoading(false);
+      const { data: phRows } = normalizedNames.length > 0
+        ? await timedRetry(() => supabase.from("price_history").select("normalized_name,price,recorded_at").in("normalized_name", normalizedNames).gte("recorded_at", since30).order("recorded_at",{ascending:true}))
+        : { data: [] };
+
+      const sparkMap: Record<string,number[]> = {};
+      (phRows||[]).forEach((r:any) => { if (!sparkMap[r.normalized_name]) sparkMap[r.normalized_name] = []; sparkMap[r.normalized_name].push(Number(r.price)); });
+
+      const withSpark = merged.map((i:any) => ({
+        ...i,
+        verified: verifiedSet.has(`${i.name?.toLowerCase().trim()}|${Number(i.price).toFixed(2)}`),
+        sparkline: sparkMap[i.normalized_name] || [],
+      }));
+      console.log("[Deals] fetchDeals result:", { deals: dealRows?.length, brands: brands?.length, dealItems: dealItems?.length, sample: withSpark.slice(0,3).map((i:any)=>({ name:i.name, brand:i.brand?.name, sale_end:i.deal?.sale_end })) });
+      setItems(withSpark);
+      setStores([...new Set(withSpark.map((i: any) => i.brand?.name).filter(Boolean))] as string[]);
+    } catch(e: any) {
+      toast.error(e.message || "Failed to load deals — tap to retry");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function dL(s: string | null) { if (!s) return null; return Math.ceil((new Date(s).getTime() - Date.now()) / 86400000); }
@@ -153,6 +168,21 @@ function DealsContent() {
   function clrAll() { setCat("All"); setStoreFilter("All"); setOnSale(false); setExpiringSoon(false); setFreshToday(false); setMaxPrice(50); }
 
   const dealIdFilter = params.get("deal_id");
+
+  // Debug: log filter drops (remove once issue is resolved)
+  if (items.length > 0) {
+    const drops: Record<string,number> = { expired:0, search:0, cat:0, store:0, price:0 };
+    items.forEach(item => {
+      const dl = dL(item.deal?.sale_end);
+      if (dl !== null && dl < 0) drops.expired++;
+      if (search && !item.name?.toLowerCase().includes(search.toLowerCase())) drops.search++;
+      if (cat !== "All" && item.category !== cat) drops.cat++;
+      if (storeFilter !== "All" && item.brand?.name !== storeFilter) drops.store++;
+      if (item.price > maxPrice) drops.price++;
+    });
+    console.log("[Deals] filter stats:", { total: items.length, drops, sale_ends: [...new Set(items.map((i:any)=>i.deal?.sale_end))] });
+  }
+
   const filtered = [...items, ...(dealIdFilter ? [] : phItems)].filter(item => {
     const q = search.toLowerCase();
     const dl = dL(item.deal?.sale_end);
@@ -318,6 +348,10 @@ function DealsContent() {
                   style={{ background:"#fff", border:"none", borderRadius:10, padding:"7px 10px", fontSize:12, fontWeight:600, color:"#6D6D72", cursor:"pointer", boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>
                   {SORTS.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
                 </select>
+                <button onClick={() => fetchDeals()}
+                  style={{ background:"#fff", color:"#6D6D72", border:"none", borderRadius:10, padding:"7px 12px", fontSize:12, fontWeight:600, cursor:"pointer", boxShadow:"0 1px 3px rgba(0,0,0,0.08)", whiteSpace:"nowrap" as const }}>
+                  ↻ Refresh
+                </button>
                 <button onClick={() => router.push("/post-deal")}
                   style={{ background:"linear-gradient(135deg,#FF9F0A,#D4800A)", color:"#fff", border:"none", borderRadius:10, padding:"7px 14px", fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" as const, boxShadow:"0 2px 6px rgba(255,159,10,0.3)" }}>
                   📷 Post Deal
@@ -436,7 +470,7 @@ function DealsContent() {
                               <span onClick={e=>{e.stopPropagation();openStoreSheet(cheapestItem.brand);}} style={{ fontSize: 12, fontWeight: 600, color: "#FF9F0A", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted" }}>🏆 {cheapestItem.brand?.name} 📍</span>
                               <span className={`pill fresh-${fr.level}`} style={{ fontSize: 9, padding: "1px 6px" }}>{fr.label}</span>
                               {sav && <span style={{ fontSize: 9, fontWeight: 600, color: "#30D158" }}>-{sav}%</span>}
-                              {dl !== null && dl <= 3 && <span style={{ fontSize: 9, fontWeight: 600, color: "#FF3B30" }}>⏰{dl === 0 ? "Last day" : `${dl}d`}</span>}
+                              {dl !== null && dl <= 3 && <span style={{ fontSize: 9, fontWeight: 600, color: "#FF3B30" }}>⏰{dl === 0 ? "Last day" : `${dl}d left`}</span>}
                             </div>
                             <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2 }}>{src(cheapestItem.source, cheapestItem.from_price_history)} · {ago(cheapestItem.created_at)} ago{cheapestItem.store_city ? ` · ${cheapestItem.store_city}` : ""}</div>
                           </div>
