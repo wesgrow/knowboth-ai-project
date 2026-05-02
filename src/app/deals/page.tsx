@@ -490,21 +490,21 @@ function DealsContent() {
             {/* ── LIST VIEW — Grouped by item with expandable stores ── */}
             {view === "list" && Object.entries(grouped).map(([category, itemGroups]) => {
               const isCollapsed = collapsedGroups.has(category);
-              const itemCount = Object.values(itemGroups).flat().length;
+              const itemCount = Object.keys(itemGroups).length;
               const isItemView = groupBy === "item";
               return (
-              <div key={category} style={{ marginBottom: 16 }}>
+              <div key={category} style={{ marginBottom: 12 }}>
                 {!isItemView && (
                   <button onClick={()=>toggleGroup(category)}
-                    style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--surf)",border:"1px solid var(--border)",borderRadius:10,cursor:"pointer",padding:"10px 14px",fontFamily:"inherit",boxShadow:"var(--shadow)",marginBottom:6}}>
+                    style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--surf)",border:"1px solid var(--border)",borderRadius:12,cursor:"pointer",padding:"11px 16px",fontFamily:"inherit",boxShadow:"var(--shadow)",marginBottom:8}}>
                     <span style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{category}</span>
-                      <span style={{fontSize:11,color:"var(--text3)",background:"var(--bg)",borderRadius:20,padding:"2px 8px",fontWeight:600}}>{itemCount}</span>
+                      <span style={{fontSize:14,fontWeight:700,color:"var(--text)"}}>{category}</span>
+                      <span style={{fontSize:11,color:"var(--text3)",background:"var(--bg)",borderRadius:20,padding:"2px 9px",fontWeight:600}}>{itemCount}</span>
                     </span>
-                    <span style={{fontSize:13,color:"var(--text3)",fontWeight:700,transition:"transform .2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▾</span>
+                    <span style={{fontSize:12,color:"var(--text3)",fontWeight:700,transition:"transform .2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▾</span>
                   </button>
                 )}
-                {(isItemView || !isCollapsed) && <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                {(isItemView || !isCollapsed) && <div style={{ background: "var(--surf,#fff)", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid var(--border,#F2F2F7)" }}>
                   {Object.entries(itemGroups).map(([itemKey, storeItems], idx, arr) => {
                     const cheapestItem = storeItems[0];
                     const otherStores = storeItems.slice(1);
@@ -514,72 +514,116 @@ function DealsContent() {
                     const fr = getFreshness(cheapestItem.created_at);
                     const color = STORE_COLORS[cheapestItem.brand?.slug] || "#FF9F0A";
                     const dl = dL(cheapestItem.deal?.sale_end);
+                    const isMulti = otherStores.length > 0;
 
                     return (
-                      <div key={itemKey} style={{ borderBottom: idx < arr.length - 1 ? "0.5px solid #F2F2F7" : "none", background: otherStores.length > 0 ? "rgba(0,122,255,0.04)" : "transparent" }}>
-                        {/* Cheapest store row — always visible */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
-                          <div style={{ width: 3, height: 40, borderRadius: 2, background: otherStores.length > 0 ? "#007AFF" : color, flexShrink: 0 }} />
+                      <div key={itemKey} style={{ borderBottom: idx < arr.length - 1 ? "0.5px solid var(--border,#F2F2F7)" : "none" }}>
+                        {/* Main row */}
+                        <div className="deal-row" style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px", background: isMulti ? "rgba(0,122,255,0.03)" : "transparent", transition: "background 0.15s" }}>
+                          {/* Color accent bar */}
+                          <div style={{ width: 3, borderRadius: 2, background: isMulti ? "#007AFF" : color, flexShrink: 0, alignSelf: "stretch", minHeight: 48 }} />
+
+                          {/* Content */}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {cheapestItem.name}{cheapestItem.verified && <span title="Price verified by community receipt" style={{marginLeft:5,fontSize:12}}>✅</span>}
+                            {/* Name */}
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text,#1C1C1E)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 2 }}>
+                              {cheapestItem.name}
+                              {cheapestItem.verified && <span title="Price verified by community receipt" style={{marginLeft:5,fontSize:11}}>✅</span>}
                             </div>
-                            {cheapestItem.notes && <div style={{ fontSize: 11, color: "#AEAEB2", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cheapestItem.notes}</div>}
-                            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2, flexWrap: "wrap" as const }}>
-                              {isItemView && cheapestItem.category && <span style={{ fontSize: 9, fontWeight: 600, color: "#6D6D72", background: "#F2F2F7", borderRadius: 20, padding: "1px 7px", flexShrink: 0 }}>{cheapestItem.category}</span>}
-                              {otherStores.length > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: "#007AFF", background: "rgba(0,122,255,0.1)", borderRadius: 20, padding: "1px 7px", flexShrink: 0 }}>🔀 {storeItems.length} stores</span>}
-                              <span onClick={e=>{e.stopPropagation();openStoreSheet(cheapestItem.brand);}} style={{ fontSize: 12, fontWeight: 600, color: "#FF9F0A", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted" }}>🏆 {cheapestItem.brand?.name} 📍</span>
-                              <span className={`pill fresh-${fr.level}`} style={{ fontSize: 9, padding: "1px 6px" }}>{fr.label}</span>
-                              {sav && <span style={{ fontSize: 9, fontWeight: 600, color: "#30D158" }}>-{sav}%</span>}
-                              {dl !== null && dl <= 3 && <span style={{ fontSize: 9, fontWeight: 600, color: "#FF3B30" }}>⏰{dl === 0 ? "Last day" : `${dl}d left`}</span>}
+                            {/* Notes */}
+                            {cheapestItem.notes && (
+                              <div style={{ fontSize: 11.5, color: "#8E8E93", marginBottom: 5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {cheapestItem.notes}
+                              </div>
+                            )}
+                            {/* Badge row */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" as const, marginBottom: 5 }}>
+                              {isItemView && cheapestItem.category && (
+                                <span style={{ fontSize: 10, fontWeight: 600, color: "#6D6D72", background: "#F2F2F7", borderRadius: 20, padding: "2px 8px" }}>{cheapestItem.category}</span>
+                              )}
+                              {isMulti && (
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "#007AFF", background: "rgba(0,122,255,0.1)", borderRadius: 20, padding: "2px 8px" }}>🔀 {storeItems.length} stores</span>
+                              )}
+                              {sav && (
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "#30D158", background: "rgba(48,209,88,0.1)", borderRadius: 20, padding: "2px 8px" }}>-{sav}% off</span>
+                              )}
+                              {dl !== null && dl <= 3 && (
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "#FF3B30", background: "rgba(255,59,48,0.08)", borderRadius: 20, padding: "2px 8px" }}>⏰ {dl === 0 ? "Last day" : `${dl}d left`}</span>
+                              )}
+                              <span className={`pill fresh-${fr.level}`} style={{ fontSize: 10, padding: "2px 7px" }}>{fr.label}</span>
                             </div>
-                            <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2 }}>{src(cheapestItem.source, cheapestItem.from_price_history)} · {ago(cheapestItem.deal?.sale_start || cheapestItem.created_at)} ago{cheapestItem.store_city ? ` · ${cheapestItem.store_city}` : ""}</div>
+                            {/* Store + meta */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" as const }}>
+                              <span onClick={e=>{e.stopPropagation();openStoreSheet(cheapestItem.brand);}}
+                                style={{ fontSize: 12, fontWeight: 600, color: "#FF9F0A", cursor: "pointer" }}>
+                                🏆 {cheapestItem.brand?.name}
+                              </span>
+                              <span style={{ fontSize: 10, color: "#C8C8CC" }}>·</span>
+                              <span style={{ fontSize: 11, color: "#C8C8CC" }}>{src(cheapestItem.source, cheapestItem.from_price_history)}</span>
+                              <span style={{ fontSize: 10, color: "#C8C8CC" }}>·</span>
+                              <span style={{ fontSize: 11, color: "#C8C8CC" }}>{ago(cheapestItem.deal?.sale_start || cheapestItem.created_at)} ago</span>
+                            </div>
                           </div>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <div style={{ fontSize: 17, fontWeight: 700, color: "#FF9F0A" }}>${cheapestItem.price?.toFixed(2)}</div>
-                            {cheapestItem.regular_price && <div style={{ fontSize: 10, color: "#AEAEB2", textDecoration: "line-through" }}>${cheapestItem.regular_price?.toFixed(2)}</div>}
-                            <div style={{ fontSize: 10, color: "#AEAEB2" }}>/{cheapestItem.unit || "ea"}</div>
-                            {cheapestItem.sparkline?.length >= 2 && <div style={{marginTop:4}}><Sparkline data={cheapestItem.sparkline}/></div>}
+
+                          {/* Right: price + buttons */}
+                          <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: "#FF9F0A", lineHeight: 1 }}>${cheapestItem.price?.toFixed(2)}</div>
+                              {cheapestItem.regular_price && (
+                                <div style={{ fontSize: 11, color: "#AEAEB2", textDecoration: "line-through", marginTop: 1 }}>${cheapestItem.regular_price?.toFixed(2)}</div>
+                              )}
+                              <div style={{ fontSize: 11, color: "#AEAEB2" }}>/{cheapestItem.unit || "ea"}</div>
+                              {cheapestItem.sparkline?.length >= 2 && <div style={{marginTop:4}}><Sparkline data={cheapestItem.sparkline}/></div>}
+                            </div>
+                            <div style={{ display: "flex", gap: 5 }}>
+                              {userId && cheapestItem.deal?.posted_by === userId && (
+                                <button onClick={() => deleteDeal(cheapestItem.deal_id)} title="Delete this deal"
+                                  style={{ width: 33, height: 33, borderRadius: 9, fontSize: 14, border: "none", cursor: "pointer", background: "rgba(255,59,48,0.08)", color: "#FF3B30", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  🗑️
+                                </button>
+                              )}
+                              <button onClick={() => addItem(cheapestItem)}
+                                style={{ padding: "7px 14px", borderRadius: 9, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: inCart ? "#F2F2F7" : "linear-gradient(135deg,#FF9F0A,#D4800A)", color: inCart ? "#AEAEB2" : "#fff", boxShadow: inCart ? "none" : "0 2px 6px rgba(255,159,10,0.3)" }}>
+                                {inCart ? "✓" : "+ Add"}
+                              </button>
+                            </div>
                           </div>
-                          <button onClick={() => addItem(cheapestItem)} style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, background: inCart ? "#F2F2F7" : "#FF9F0A", color: inCart ? "#AEAEB2" : "#fff" }}>
-                            {inCart ? "✓" : "+ Add"}
-                          </button>
-                          {userId && cheapestItem.deal?.posted_by === userId && (
-                            <button onClick={() => deleteDeal(cheapestItem.deal_id)} title="Delete this deal" style={{ padding: "7px 10px", borderRadius: 9, fontSize: 13, border: "none", cursor: "pointer", flexShrink: 0, background: "rgba(255,59,48,0.08)", color: "#FF3B30" }}>
-                              🗑️
-                            </button>
-                          )}
                         </div>
 
-                        {/* Expand button if other stores exist */}
-                        {otherStores.length > 0 && (
-                          <button onClick={() => toggleExpand(itemKey)} style={{ width: "100%", background: isExpanded ? "rgba(0,122,255,0.08)" : "rgba(0,122,255,0.04)", border: "none", borderTop: "0.5px solid rgba(0,122,255,0.12)", padding: "8px 16px", fontSize: 12, fontWeight: 600, color: "#007AFF", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        {/* Expand button */}
+                        {isMulti && (
+                          <button onClick={() => toggleExpand(itemKey)}
+                            style={{ width: "100%", background: isExpanded ? "rgba(0,122,255,0.08)" : "rgba(0,122,255,0.04)", border: "none", borderTop: "0.5px solid rgba(0,122,255,0.1)", padding: "9px 16px", fontSize: 12, fontWeight: 600, color: "#007AFF", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                             <span>{isExpanded ? "▲ Hide stores" : `▼ Also at ${otherStores.length} more store${otherStores.length > 1 ? "s" : ""}`}</span>
-                            <span style={{ fontSize: 11, color: "rgba(0,122,255,0.7)" }}>
+                            <span style={{ fontSize: 11, color: "rgba(0,122,255,0.65)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "55%" }}>
                               {!isExpanded && otherStores.map(s => `${s.brand?.name} $${s.price?.toFixed(2)}`).join(" · ")}
                             </span>
                           </button>
                         )}
 
                         {/* Expanded other stores */}
-                        {isExpanded && otherStores.map((store, si) => {
+                        {isExpanded && otherStores.map((store) => {
                           const storeInCart = !!cart.find(i => i.id === store.id);
-                          const storeColor = STORE_COLORS[store.brand?.slug] || "#6D6D72";
+                          const storeColor = STORE_COLORS[store.brand?.slug] || "#8E8E93";
                           const diff = (store.price - cheapestItem.price).toFixed(2);
                           return (
-                            <div key={store.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px 10px 32px", background: "#F9F9F9", borderTop: "0.5px solid #F2F2F7" }}>
-                              <div style={{ width: 3, height: 32, borderRadius: 2, background: storeColor, flexShrink: 0 }} />
+                            <div key={store.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px 11px 28px", background: "rgba(0,122,255,0.03)", borderTop: "0.5px solid rgba(0,122,255,0.08)" }}>
+                              <div style={{ width: 2, minHeight: 32, borderRadius: 2, background: storeColor, flexShrink: 0, alignSelf: "stretch" }} />
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: "#6D6D72" }}>{store.brand?.name}</div>
-                                {store.notes && <div style={{ fontSize: 11, color: "#AEAEB2", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{store.notes}</div>}
-                                <div style={{ fontSize: 10, color: "#AEAEB2" }}>{src(store.source, store.from_price_history)} · {ago(store.deal?.sale_start || store.created_at)} ago</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text,#1C1C1E)" }}>{store.brand?.name}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#FF3B30", background: "rgba(255,59,48,0.08)", borderRadius: 20, padding: "1px 6px" }}>+${diff}</span>
+                                </div>
+                                {store.notes && <div style={{ fontSize: 11, color: "#8E8E93", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 1 }}>{store.notes}</div>}
+                                <div style={{ fontSize: 10, color: "#C8C8CC" }}>{src(store.source, store.from_price_history)} · {ago(store.deal?.sale_start || store.created_at)} ago</div>
                               </div>
                               <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                <div style={{ fontSize: 15, fontWeight: 700, color: "#1C1C1E" }}>${store.price?.toFixed(2)}</div>
-                                <div style={{ fontSize: 10, color: "#FF3B30", fontWeight: 600 }}>+${diff} more</div>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text,#1C1C1E)" }}>${store.price?.toFixed(2)}</div>
+                                <div style={{ fontSize: 10, color: "#AEAEB2" }}>/{store.unit || "ea"}</div>
                               </div>
-                              <button onClick={() => addItem(store)} style={{ padding: "6px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, background: storeInCart ? "#F2F2F7" : "#F2F2F7", color: storeInCart ? "#AEAEB2" : "#1C1C1E", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                                {storeInCart ? "✓" : "+ Add"}
+                              <button onClick={() => addItem(store)}
+                                style={{ padding: "6px 11px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", background: storeInCart ? "#F2F2F7" : "#F2F2F7", color: storeInCart ? "#AEAEB2" : "#1C1C1E", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                                {storeInCart ? "✓" : "Add"}
                               </button>
                             </div>
                           );
@@ -639,54 +683,69 @@ function DealsContent() {
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#AEAEB2", letterSpacing: 0.5 }}>🧾 COMMUNITY PRICES FROM SCANNED BILLS</span>
                   <div style={{ height: 1, flex: 1, background: "#F2F2F7" }} />
                 </div>
-                <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                <div style={{ background: "var(--surf,#fff)", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid var(--border,#F2F2F7)" }}>
                   {Object.entries(communityGrouped).map(([itemKey, storeItems], idx, arr) => {
                     const cheapest = storeItems[0];
                     const others = storeItems.slice(1);
                     const isExpanded = expandedItems.has(`ph-${itemKey}`);
                     const inCart = !!cart.find(i => i.id === cheapest.id);
                     return (
-                      <div key={itemKey} style={{ borderBottom: idx < arr.length - 1 ? "0.5px solid #F2F2F7" : "none" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
-                          <div style={{ width: 3, height: 40, borderRadius: 2, background: "#30D158", flexShrink: 0 }} />
+                      <div key={itemKey} style={{ borderBottom: idx < arr.length - 1 ? "0.5px solid var(--border,#F2F2F7)" : "none" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px" }}>
+                          <div style={{ width: 3, borderRadius: 2, background: "#30D158", flexShrink: 0, alignSelf: "stretch", minHeight: 44 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cheapest.name}</div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2, flexWrap: "wrap" as const }}>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: "#6D6D72" }}>{cheapest.brand?.name}</span>
-                              {cheapest.store_city && <span style={{ fontSize: 11, color: "#AEAEB2" }}>· {cheapest.store_city}</span>}
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text,#1C1C1E)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 4 }}>{cheapest.name}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" as const, marginBottom: 4 }}>
+                              {others.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: "#30D158", background: "rgba(48,209,88,0.1)", borderRadius: 20, padding: "2px 8px" }}>🔀 {storeItems.length} stores</span>}
                             </div>
-                            <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2 }}>🧾 Community · {ago(cheapest.created_at)} ago</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "#6D6D72" }}>{cheapest.brand?.name}</span>
+                              {cheapest.store_city && <><span style={{ fontSize: 10, color: "#C8C8CC" }}>·</span><span style={{ fontSize: 11, color: "#C8C8CC" }}>{cheapest.store_city}</span></>}
+                              <span style={{ fontSize: 10, color: "#C8C8CC" }}>·</span>
+                              <span style={{ fontSize: 11, color: "#C8C8CC" }}>{ago(cheapest.created_at)} ago</span>
+                            </div>
                           </div>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <div style={{ fontSize: 17, fontWeight: 700, color: "#FF9F0A" }}>${cheapest.price?.toFixed(2)}</div>
-                            <div style={{ fontSize: 10, color: "#AEAEB2" }}>/{cheapest.unit || "ea"}</div>
+                          <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: "#FF9F0A", lineHeight: 1 }}>${cheapest.price?.toFixed(2)}</div>
+                              <div style={{ fontSize: 11, color: "#AEAEB2" }}>/{cheapest.unit || "ea"}</div>
+                            </div>
+                            <button onClick={() => addItem(cheapest)}
+                              style={{ padding: "7px 14px", borderRadius: 9, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: inCart ? "#F2F2F7" : "linear-gradient(135deg,#FF9F0A,#D4800A)", color: inCart ? "#AEAEB2" : "#fff", boxShadow: inCart ? "none" : "0 2px 6px rgba(255,159,10,0.3)" }}>
+                              {inCart ? "✓" : "+ Add"}
+                            </button>
                           </div>
-                          <button onClick={() => addItem(cheapest)} style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, background: inCart ? "#F2F2F7" : "#FF9F0A", color: inCart ? "#AEAEB2" : "#fff" }}>
-                            {inCart ? "✓" : "+ Add"}
-                          </button>
                         </div>
                         {others.length > 0 && (
-                          <button onClick={() => toggleExpand(`ph-${itemKey}`)} style={{ width: "100%", background: isExpanded ? "rgba(48,209,88,0.04)" : "#FAFAFA", border: "none", borderTop: "0.5px solid #F2F2F7", padding: "8px 16px", fontSize: 12, fontWeight: 600, color: "#6D6D72", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span>{isExpanded ? "Hide" : `▼ Also at ${others.length} more store${others.length > 1 ? "s" : ""}`}</span>
-                            <span style={{ fontSize: 11 }}>{!isExpanded && others.map(s => `${s.brand?.name} $${s.price?.toFixed(2)}`).join(" · ")}{isExpanded && "▲ Collapse"}</span>
+                          <button onClick={() => toggleExpand(`ph-${itemKey}`)}
+                            style={{ width: "100%", background: isExpanded ? "rgba(48,209,88,0.08)" : "rgba(48,209,88,0.04)", border: "none", borderTop: "0.5px solid rgba(48,209,88,0.12)", padding: "9px 16px", fontSize: 12, fontWeight: 600, color: "#30D158", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span>{isExpanded ? "▲ Hide stores" : `▼ Also at ${others.length} more store${others.length > 1 ? "s" : ""}`}</span>
+                            <span style={{ fontSize: 11, color: "rgba(48,209,88,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "55%" }}>
+                              {!isExpanded && others.map(s => `${s.brand?.name} $${s.price?.toFixed(2)}`).join(" · ")}
+                            </span>
                           </button>
                         )}
-                        {isExpanded && others.map((store, si) => {
+                        {isExpanded && others.map((store) => {
                           const storeInCart = !!cart.find(i => i.id === store.id);
                           const diff = (store.price - cheapest.price).toFixed(2);
                           return (
-                            <div key={store.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px 10px 32px", background: "#F9F9F9", borderTop: "0.5px solid #F2F2F7" }}>
-                              <div style={{ width: 3, height: 32, borderRadius: 2, background: "#30D158", flexShrink: 0 }} />
+                            <div key={store.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px 11px 28px", background: "rgba(48,209,88,0.03)", borderTop: "0.5px solid rgba(48,209,88,0.08)" }}>
+                              <div style={{ width: 2, minHeight: 28, borderRadius: 2, background: "#30D158", flexShrink: 0, alignSelf: "stretch" }} />
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: "#6D6D72" }}>{store.brand?.name}{store.store_city ? ` · ${store.store_city}` : ""}</div>
-                                <div style={{ fontSize: 10, color: "#AEAEB2" }}>🧾 Community · {ago(store.created_at)} ago</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text,#1C1C1E)" }}>{store.brand?.name}</span>
+                                  {store.store_city && <span style={{ fontSize: 11, color: "#C8C8CC" }}>· {store.store_city}</span>}
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#FF3B30", background: "rgba(255,59,48,0.08)", borderRadius: 20, padding: "1px 6px" }}>+${diff}</span>
+                                </div>
+                                <div style={{ fontSize: 10, color: "#C8C8CC" }}>🧾 Community · {ago(store.created_at)} ago</div>
                               </div>
                               <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                <div style={{ fontSize: 15, fontWeight: 700, color: "#1C1C1E" }}>${store.price?.toFixed(2)}</div>
-                                <div style={{ fontSize: 10, color: "#FF3B30", fontWeight: 600 }}>+${diff} more</div>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text,#1C1C1E)" }}>${store.price?.toFixed(2)}</div>
+                                <div style={{ fontSize: 10, color: "#AEAEB2" }}>/{store.unit || "ea"}</div>
                               </div>
-                              <button onClick={() => addItem(store)} style={{ padding: "6px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, background: "#F2F2F7", color: storeInCart ? "#AEAEB2" : "#1C1C1E", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                                {storeInCart ? "✓" : "+ Add"}
+                              <button onClick={() => addItem(store)}
+                                style={{ padding: "6px 11px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", background: "#F2F2F7", color: storeInCart ? "#AEAEB2" : "#1C1C1E" }}>
+                                {storeInCart ? "✓" : "Add"}
                               </button>
                             </div>
                           );
