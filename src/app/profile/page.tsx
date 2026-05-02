@@ -128,7 +128,7 @@ export default function ProfilePage() {
   return (
     <>
       <div className="page-body">
-        <div className="page-content" style={{maxWidth:600}}>
+        <div className="page-content" style={{maxWidth:720}}>
 
           {/* Profile Hero */}
           <div className="fade-up" style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",borderRadius:20,padding:"24px 20px",marginBottom:16,textAlign:"center",position:"relative",overflow:"hidden"}}>
@@ -207,11 +207,11 @@ export default function ProfilePage() {
                 <div style={{display:"flex",flexDirection:"column" as const,gap:10}}>
                   <div>
                     <div style={{fontSize:11,fontWeight:700,color:"var(--text3)",letterSpacing:0.4,marginBottom:5}}>DISPLAY NAME</div>
-                    <input style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 14px",fontSize:16,color:"var(--text)",outline:"none"}} value={name} onChange={e=>setName(e.target.value)} placeholder="Your name"/>
+                    <input style={{width:"100%",boxSizing:"border-box" as const,background:"var(--bg)",border:"1.5px solid var(--border)",borderRadius:10,padding:"11px 14px",fontSize:16,color:"var(--text)",outline:"none"}} value={name} onChange={e=>setName(e.target.value)} placeholder="Your name"/>
                   </div>
                   <div>
                     <div style={{fontSize:11,fontWeight:700,color:"var(--text3)",letterSpacing:0.4,marginBottom:5}}>CITY / AREA</div>
-                    <input style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 14px",fontSize:16,color:"var(--text)",outline:"none"}} value={city} onChange={e=>setCity(e.target.value)} placeholder="e.g. Dallas, TX"/>
+                    <input style={{width:"100%",boxSizing:"border-box" as const,background:"var(--bg)",border:"1.5px solid var(--border)",borderRadius:10,padding:"11px 14px",fontSize:16,color:"var(--text)",outline:"none"}} value={city} onChange={e=>setCity(e.target.value)} placeholder="e.g. Dallas, TX"/>
                   </div>
                 </div>
               </div>
@@ -220,7 +220,7 @@ export default function ProfilePage() {
                 <div style={{fontSize:11,fontWeight:700,color:"var(--text3)",letterSpacing:0.6,textTransform:"uppercase" as const,marginBottom:10}}>Preferences</div>
                 <div>
                   <div style={{fontSize:11,fontWeight:700,color:"var(--text3)",letterSpacing:0.4,marginBottom:5}}>CURRENCY</div>
-                  <select style={{width:"100%",background:"var(--bg)",border:"none",borderRadius:10,padding:"11px 14px",fontSize:16,color:"var(--text)",outline:"none",cursor:"pointer"}} value={currency} onChange={e=>setCurrency(e.target.value)}>
+                  <select style={{width:"100%",background:"var(--bg)",border:"1.5px solid var(--border)",borderRadius:10,padding:"11px 14px",fontSize:16,color:"var(--text)",outline:"none",cursor:"pointer"}} value={currency} onChange={e=>setCurrency(e.target.value)}>
                     {CURRENCIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>

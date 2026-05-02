@@ -93,71 +93,86 @@ export default function CartPage() {
 
   return (
     <>
-      <div style={{background:"var(--bg)",minHeight:"100vh"}}>
-        <div style={{padding:"20px 24px",maxWidth:1200,width:"100%"}}>
+      <style>{`
+        .cart-item-row{transition:opacity .2s}
+        .cart-action-btn{border:none;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit}
+        .qty-btn{width:26px;height:26px;border-radius:8px;border:none;background:var(--bg);color:var(--text);cursor:pointer;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center}
+        @media(hover:none){.cart-item-row:active{opacity:.85}}
+      `}</style>
+      <div style={{background:"var(--bg)",minHeight:"100vh",paddingBottom:80}}>
+        <div style={{maxWidth:720,width:"100%",margin:"0 auto",padding:"20px 18px"}}>
 
           {/* Header */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-            <div>
-              <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>My Cart</h1>
-              <p style={{fontSize:13,color:"var(--text2)",marginTop:3}}>{itemCount} items · {storeCount} store{storeCount!==1?"s":""}</p>
-            </div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <button onClick={()=>setShowAddForm(true)}
-                style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,padding:"9px 14px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
-                + Add Item
-              </button>
-              {cart.length>0&&(
-                <button onClick={()=>{if(window.confirm("Clear all items?"))clearCart();}}
-                  style={{background:"rgba(255,59,48,0.08)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:600,color:"var(--red)",cursor:"pointer"}}>
-                  Clear All
+          <div className="fade-up" style={{marginBottom:22}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8,margin:0}}>My Cart</h1>
+                <p style={{fontSize:13,color:"var(--text3)",marginTop:3,marginBottom:0}}>
+                  {itemCount > 0 ? `${itemCount} item${itemCount!==1?"s":""} · ${storeCount} store${storeCount!==1?"s":""}` : "Empty"}
+                </p>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <button onClick={()=>setShowAddForm(true)}
+                  style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,padding:"9px 16px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",fontFamily:"inherit",boxShadow:"0 3px 10px rgba(255,159,10,.3)"}}>
+                  + Add Item
                 </button>
-              )}
+                {cart.length > 0 && (
+                  <button onClick={()=>{if(window.confirm("Clear all items?"))clearCart();}}
+                    style={{background:"rgba(255,59,48,.08)",border:"1px solid rgba(255,59,48,.2)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:600,color:"var(--red)",cursor:"pointer",fontFamily:"inherit"}}>
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Empty state */}
-          {cart.length===0&&(
-            <div style={{textAlign:"center",padding:"80px 0"}}>
+          {cart.length === 0 && (
+            <div className="fade-up" style={{textAlign:"center",padding:"72px 0"}}>
               <div style={{fontSize:56,marginBottom:16}}>🛒</div>
-              <div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:8}}>Cart is empty</div>
+              <div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:8}}>Your cart is empty</div>
               <p style={{fontSize:14,color:"var(--text2)",marginBottom:24}}>Browse deals and add items to your cart</p>
               <button onClick={()=>router.push("/deals")}
-                style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,padding:"12px 24px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
+                style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,padding:"12px 24px",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,.3)",fontFamily:"inherit"}}>
                 Browse Deals →
               </button>
             </div>
           )}
 
           {/* Store grouped items */}
-          {Object.entries(groups).map(([storeName,items])=>{
+          {Object.entries(groups).map(([storeName, items]) => {
             const color = STORE_COLORS[items[0]?.store_slug] || "#FF9F0A";
             const storeTotal = items.reduce((s,i)=>(i.price||0)*i.qty+s,0);
-            return(
-              <div key={storeName} style={{marginBottom:16}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,paddingLeft:2}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+            return (
+              <div key={storeName} className="fade-up" style={{marginBottom:16}}>
+                {/* Store label */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,paddingLeft:4}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7}}>
                     <div style={{width:8,height:8,borderRadius:"50%",background:color}}/>
-                    <span style={{fontSize:12,fontWeight:700,color:"var(--text)"}}>{storeName}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{storeName}</span>
                     <span style={{fontSize:11,color:"var(--text3)"}}>({items.length} item{items.length!==1?"s":""})</span>
                   </div>
                   <span style={{fontSize:13,fontWeight:700,color}}>{fmt(storeTotal)}</span>
                 </div>
-                <div style={{background:"var(--surf)",borderRadius:14,overflow:"hidden",boxShadow:"var(--shadow)"}}>
-                  {items.map((item,i)=>(
-                    <div key={item.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"12px 16px",borderBottom:i<items.length-1?"0.5px solid var(--border2)":"none",opacity:item.purchased?0.5:1,transition:"opacity 0.2s"}}>
 
-                      {/* Mark as purchased */}
+                {/* Item rows */}
+                <div style={{background:"var(--surf)",borderRadius:16,overflow:"hidden",boxShadow:"var(--shadow)"}}>
+                  {items.map((item, i) => (
+                    <div key={item.id} className="cart-item-row"
+                      style={{display:"flex",alignItems:"flex-start",gap:10,padding:"13px 16px",borderBottom:i<items.length-1?"0.5px solid var(--border2)":"none",opacity:item.purchased?0.45:1}}>
+
+                      {/* Checkbox */}
                       <button onClick={()=>togglePurchased(item.id)}
-                        style={{width:26,height:26,marginTop:2,borderRadius:8,border:`2px solid ${item.purchased?"var(--green)":"var(--border)"}`,background:item.purchased?"var(--green)":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}>
-                        {item.purchased&&<span style={{color:"#fff",fontSize:13,fontWeight:700}}>✓</span>}
+                        style={{width:26,height:26,marginTop:2,borderRadius:8,border:`2px solid ${item.purchased?"var(--green)":"var(--border)"}`,background:item.purchased?"var(--green)":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .2s",fontFamily:"inherit"}}>
+                        {item.purchased && <span style={{color:"#fff",fontSize:13,fontWeight:700}}>✓</span>}
                       </button>
 
-                      <div style={{width:36,height:36,borderRadius:10,background:`${color}12`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>
+                      {/* Icon */}
+                      <div style={{width:36,height:36,borderRadius:10,background:`${color}14`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>
                         {CAT_ICONS[item.category]||"📦"}
                       </div>
 
-                      {/* Name + category + action buttons */}
+                      {/* Info + actions */}
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,fontWeight:600,color:"var(--text)",wordBreak:"break-word",lineHeight:1.3,textDecoration:item.purchased?"line-through":"none"}}>{item.name}</div>
                         <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{item.category} · {item.unit}</div>
@@ -167,28 +182,22 @@ export default function CartPage() {
                           defaultValue={item.notes || ""}
                           placeholder="Add note…"
                           onBlur={e => updateNotes(item.id, e.target.value)}
-                          style={{marginTop:4,width:"100%",fontSize:11,color:"var(--text2)",background:"transparent",border:"none",borderBottom:"0.5px solid var(--border2)",padding:"2px 0",outline:"none",fontFamily:"inherit"}}
+                          style={{marginTop:5,width:"100%",fontSize:11,color:"var(--text2)",background:"transparent",border:"none",borderBottom:"0.5px solid var(--border2)",padding:"2px 0",outline:"none",fontFamily:"inherit"}}
                         />
-                        <div style={{display:"flex",gap:4,marginTop:7,flexWrap:"wrap"}}>
-                          <button onClick={()=>{moveToPantry(item);toast.success(`${item.name} moved to stock`);}}
-                            title="Move to Stock"
-                            style={{background:"rgba(48,209,88,0.1)",border:"none",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,color:"var(--green)",cursor:"pointer"}}>
-                            📦 Stock
-                          </button>
-                          <button onClick={()=>logAsExpense(item)}
-                            title="Log as Expense"
-                            style={{background:"rgba(10,132,255,0.1)",border:"none",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,color:"var(--blue)",cursor:"pointer"}}>
-                            💸 Expense
-                          </button>
+                        <div style={{display:"flex",gap:5,marginTop:8,flexWrap:"wrap"}}>
+                          <button className="cart-action-btn" onClick={()=>{moveToPantry(item);toast.success(`${item.name} moved to stock`);}}
+                            style={{background:"rgba(48,209,88,.1)",color:"var(--green)"}}>📦 Stock</button>
+                          <button className="cart-action-btn" onClick={()=>logAsExpense(item)}
+                            style={{background:"rgba(10,132,255,.1)",color:"var(--blue)"}}>💸 Expense</button>
                           <button onClick={()=>{removeFromCart(item.id);toast(`${item.name} removed`);}}
-                            style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:14,padding:"2px 4px",lineHeight:1}}>✕</button>
+                            style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:14,padding:"2px 5px",lineHeight:1,fontFamily:"inherit"}}>✕</button>
                         </div>
                       </div>
 
-                      {/* Qty + price stacked on the right */}
+                      {/* Qty + Price */}
                       <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
                         <div style={{display:"flex",alignItems:"center",gap:4}}>
-                          <button onClick={()=>updateQty(item.id,item.qty-1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                          <button className="qty-btn" onClick={()=>updateQty(item.id,item.qty-1)}>−</button>
                           <input
                             key={`qty-${item.id}-${item.qty}`}
                             type="number"
@@ -196,20 +205,20 @@ export default function CartPage() {
                             min="0.01"
                             step="0.01"
                             onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)&&v>0)updateQty(item.id,v);}}
-                            style={{width:46,fontSize:13,fontWeight:700,color:"var(--text)",textAlign:"center",border:"1px solid var(--border)",borderRadius:7,background:"var(--bg)",padding:"2px 4px",outline:"none"}}
+                            style={{width:46,fontSize:13,fontWeight:700,color:"var(--text)",textAlign:"center",border:"1px solid var(--border)",borderRadius:7,background:"var(--bg)",padding:"2px 4px",outline:"none",fontFamily:"inherit"}}
                           />
-                          <button onClick={()=>updateQty(item.id,item.qty+1)} style={{width:24,height:24,borderRadius:7,border:"none",background:"var(--bg)",color:"var(--text)",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                          <button className="qty-btn" onClick={()=>updateQty(item.id,item.qty+1)}>+</button>
                         </div>
                         <div style={{textAlign:"right"}}>
                           <div style={{fontSize:14,fontWeight:700,color:"var(--gold)"}}>{fmt((item.price||0)*item.qty)}</div>
-                          {item.qty>1&&<div style={{fontSize:10,color:"var(--text3)"}}>{fmt(item.price)}/ea</div>}
+                          {item.qty > 1 && <div style={{fontSize:10,color:"var(--text3)"}}>{fmt(item.price)}/ea</div>}
                           {(()=>{
                             const norm = item.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
                             const cheaper = savingsMap[norm];
                             const iStore = (item.store||"").toLowerCase().trim();
                             const cStore = (cheaper?.store||"").toLowerCase().trim();
                             if (cheaper && (item.price||0) > 0 && cheaper.price < (item.price||0) && cStore !== iStore) {
-                              return <div style={{fontSize:10,color:"#30D158",fontWeight:700,marginTop:2,whiteSpace:"nowrap"}}>Save {fmt((item.price||0)-cheaper.price)}/ea @ {cheaper.store}</div>;
+                              return <div style={{fontSize:10,color:"var(--green)",fontWeight:700,marginTop:2,whiteSpace:"nowrap"}}>Save {fmt((item.price||0)-cheaper.price)}/ea @ {cheaper.store}</div>;
                             }
                             return null;
                           })()}
@@ -222,19 +231,19 @@ export default function CartPage() {
             );
           })}
 
-          {/* Summary */}
-          {cart.length>0&&(
-            <div style={{background:"var(--surf)",borderRadius:16,overflow:"hidden",boxShadow:"var(--shadow)",marginBottom:20}}>
+          {/* Checkout summary */}
+          {cart.length > 0 && (
+            <div style={{background:"var(--surf)",borderRadius:16,overflow:"hidden",boxShadow:"var(--shadow)",marginBottom:16}}>
               <button onClick={()=>setShowSummary(!showSummary)}
-                style={{width:"100%",padding:"14px 16px",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                style={{width:"100%",padding:"14px 16px",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",fontFamily:"inherit"}}>
                 <span style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>🧾 Checkout Summary</span>
-                <span style={{fontSize:14,color:"var(--text3)"}}>{showSummary?"▲":"▼"}</span>
+                <span style={{fontSize:13,color:"var(--text3)"}}>{showSummary?"▲":"▼"}</span>
               </button>
-              {showSummary&&(
+              {showSummary && (
                 <div style={{borderTop:"0.5px solid var(--border2)"}}>
-                  {storeTotals.map((s,i)=>{
+                  {storeTotals.map((s, i) => {
                     const color = STORE_COLORS[s.slug] || "#FF9F0A";
-                    return(
+                    return (
                       <div key={s.store} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 16px",borderBottom:i<storeTotals.length-1?"0.5px solid var(--border2)":"none"}}>
                         <div style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0}}/>
                         <div style={{flex:1}}>
@@ -248,7 +257,7 @@ export default function CartPage() {
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px"}}>
                     <div>
                       <div style={{fontSize:13,fontWeight:600,color:"var(--text2)"}}>Total ({itemCount} items)</div>
-                      {storeCount>1&&<div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{storeCount} stores to visit</div>}
+                      {storeCount > 1 && <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{storeCount} stores to visit</div>}
                     </div>
                     <div style={{fontSize:22,fontWeight:900,color:"var(--gold)"}}>{fmt(total)}</div>
                   </div>
@@ -257,22 +266,22 @@ export default function CartPage() {
             </div>
           )}
 
-          {/* Bottom action */}
-          {cart.length>0&&(
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"var(--surf)",borderRadius:14,padding:"16px 20px",boxShadow:"var(--shadow)"}}>
+          {/* Bottom bar */}
+          {cart.length > 0 && (
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"var(--surf)",borderRadius:16,padding:"16px 20px",boxShadow:"var(--shadow)"}}>
               <div>
-                <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:0.5}}>ESTIMATED TOTAL</div>
-                <div style={{fontSize:24,fontWeight:900,color:"var(--gold)",letterSpacing:-0.5}}>{fmt(total)}</div>
+                <div style={{fontSize:10,color:"var(--text3)",fontWeight:700,letterSpacing:0.6,textTransform:"uppercase"}}>Estimated Total</div>
+                <div style={{fontSize:26,fontWeight:900,color:"var(--gold)",letterSpacing:-0.5,lineHeight:1.1}}>{fmt(total)}</div>
               </div>
               <button onClick={()=>router.push("/scan")}
-                style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,padding:"12px 20px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
+                style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:12,padding:"13px 20px",fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,.3)",fontFamily:"inherit"}}>
                 🧾 Upload Bill →
               </button>
             </div>
           )}
         </div>
       </div>
-      {showAddForm && <AddCartItemForm onClose={() => setShowAddForm(false)} />}
+      {showAddForm && <AddCartItemForm onClose={()=>setShowAddForm(false)}/>}
     </>
   );
 }

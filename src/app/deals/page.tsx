@@ -283,7 +283,7 @@ function DealsContent() {
   const TH = { padding: "9px 14px", fontSize: 11, fontWeight: 600 as const, color: "#AEAEB2", textAlign: "left" as const, letterSpacing: 0.3, textTransform: "uppercase" as const, background: "#F9F9F9", borderBottom: "0.5px solid #F2F2F7", whiteSpace: "nowrap" as const };
   return (
     <>
-    <div style={{ minHeight: "100vh", background: "#F2F2F7" }} className="page-body">
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }} className="page-body">
       <style>{`
         @media (max-width: 640px) {
           .group-by-controls { width: 100%; padding-top: 6px; }
@@ -293,25 +293,25 @@ function DealsContent() {
         @media (min-width: 641px) {
           .table-hint { display: none; }
         }
-        /* Filter panel: scrollable on small phones */
         @media (max-width: 480px) {
           .deals-filter-panel { max-height: 72vh; overflow-y: auto; }
         }
-        /* Hover reset on touch devices */
         @media (hover: none) {
           .deal-row:hover { background: transparent !important; }
         }
-        /* Reduced motion */
         @media (prefers-reduced-motion: reduce) {
           * { transition-duration: 0.01ms !important; }
         }
+        .page-body .container { max-width: 720px; margin: 0 auto; padding: 20px 18px; }
+        .page-body input[type=text], .page-body input[type=search] { background: var(--surf) !important; color: var(--text) !important; }
+        .page-body select { background: var(--surf) !important; color: var(--text) !important; }
       `}</style>
       <div className="container">
 
         {/* Search */}
             <div style={{ position: "relative", marginBottom: 10 }}>
               <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#AEAEB2", fontSize: 15 }}>🔍</span>
-              <input style={{ width: "100%", background: "#fff", border: "none", borderRadius: 12, padding: "12px 16px 12px 42px", fontSize: 16, color: "#1C1C1E", outline: "none", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search deals, items, stores..." />
+              <input style={{ width: "100%", background: "var(--surf)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "12px 16px 12px 42px", fontSize: 16, color: "var(--text)", outline: "none", boxShadow: "var(--shadow)", fontFamily: "inherit", boxSizing: "border-box" }} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search deals, items, stores..." />
             </div>
 
             {/* Toolbar — single row on desktop, wraps on mobile */}

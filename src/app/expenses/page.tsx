@@ -242,19 +242,19 @@ export default function ExpensesPage() {
             </button>
           ))}
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            style={{ background: "var(--surf)", border: "none", borderRadius: 10, padding: "6px 10px", fontSize: 12, color: "var(--text)", outline: "none", flexShrink: 0, boxShadow: "var(--shadow)" }} />
+            style={{ background: "var(--surf)", border: "1px solid var(--border)", borderRadius: 10, padding: "6px 10px", fontSize: 12, color: "var(--text)", outline: "none", flexShrink: 0, boxShadow: "var(--shadow)" }} />
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            style={{ background: "var(--surf)", border: "none", borderRadius: 10, padding: "6px 10px", fontSize: 12, color: "var(--text)", outline: "none", flexShrink: 0, boxShadow: "var(--shadow)" }} />
+            style={{ background: "var(--surf)", border: "1px solid var(--border)", borderRadius: 10, padding: "6px 10px", fontSize: 12, color: "var(--text)", outline: "none", flexShrink: 0, boxShadow: "var(--shadow)" }} />
         </div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" as const }}>
           <select value={filterStore} onChange={e => setFilterStore(e.target.value)}
-            style={{ flex: 1, minWidth: 140, background: "var(--surf)", border: "none", borderRadius: 10, padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none", boxShadow: "var(--shadow)" }}>
+            style={{ flex: 1, minWidth: 140, background: "var(--surf)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none", boxShadow: "var(--shadow)" }}>
             <option value="All">All Stores</option>
             {allStores.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-            style={{ flex: 1, minWidth: 140, background: "var(--surf)", border: "none", borderRadius: 10, padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none", boxShadow: "var(--shadow)" }}>
+            style={{ flex: 1, minWidth: 140, background: "var(--surf)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px", fontSize: 13, color: "var(--text)", outline: "none", boxShadow: "var(--shadow)" }}>
             <option value="All">All Categories</option>
             {loadedCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
           </select>

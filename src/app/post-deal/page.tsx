@@ -125,7 +125,11 @@ export default function PostDealPage() {
       if (loc.state?.trim()) payload.state = loc.state.trim();
       if (loc.zip?.trim()) payload.zip = loc.zip.trim();
       if (loc.phone?.trim()) payload.phone = loc.phone.trim();
-      const { data } = await supabase.from("store_locations").insert(payload).select("id").single();
+      const { data, error: locErr } = await supabase.from("store_locations").insert(payload).select("id").maybeSingle();
+      if (locErr) {
+        if (locErr.code !== "23505") toast.error(`Could not add ${city}: ${locErr.message}`);
+        continue;
+      }
       if (data) ids.push(data.id);
     }
     return ids;
@@ -146,7 +150,7 @@ export default function PostDealPage() {
       const newIds = await autoCreateLocations(brandId, brandName, toCreate);
       matchedIds.push(...newIds);
       await fetchLocations(brandId);
-      toast.success(`${toCreate.length} branch${toCreate.length>1?"es":""} auto-added`);
+      if (newIds.length > 0) toast.success(`${newIds.length} branch${newIds.length>1?"es":""} auto-added`);
     }
     if (matchedIds.length > 0) { setLocationMode("specific"); setSelectedLocs(matchedIds); }
     setPendingExtractedLocs([]);
@@ -154,18 +158,15 @@ export default function PostDealPage() {
 
   async function autoMatchStore(storeName: string, storedLocs: ExtractedLoc[]) {
     if (!storeName.trim()) return;
-    console.log("[PostDeal] autoMatchStore:", { storeName, extractedLocs: storedLocs, availableBrands: brands.map(b=>b.name) });
     const match = brands.find(b => {
       const nb = norm(b.name), ns = norm(storeName);
       return nb === ns || nb.includes(ns) || ns.includes(nb);
     });
     if (match) {
-      console.log("[PostDeal] autoMatchStore: matched brand", match);
       setSelectedBrand(match);
       const dbLocs = await fetchLocations(match.id);
       if (storedLocs.length > 0) await matchAndApplyLocations(match.id, match.name, storedLocs, dbLocs);
     } else {
-      console.log("[PostDeal] autoMatchStore: no match found — showing Add Store sheet");
       setNewBrandName(storeName);
       if (storedLocs.length > 0) setPendingExtractedLocs(storedLocs);
     }
@@ -215,7 +216,7 @@ export default function PostDealPage() {
 
       fetchBrands();
       if (pendingExtractedLocs.length > 0) {
-        matchAndApplyLocations(data.id, data.name, pendingExtractedLocs, []).catch(console.error);
+        await matchAndApplyLocations(data.id, data.name, pendingExtractedLocs, []);
       } else {
         fetchLocations(data.id);
       }
@@ -297,10 +298,8 @@ export default function PostDealPage() {
           setExtractProgress(`Extracting file ${i+1} of ${files.length}...`);
           const b64 = await toB64(files[i]);
           const body = { store:selectedBrand?.name||"", b64, mime:files[i].type };
-          console.log(`[PostDeal] extract: sending file ${i+1}/${files.length}`, { mime: files[i].type, size: files[i].size });
           const res = await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
           const data = await res.json();
-          console.log(`[PostDeal] extract: API response file ${i+1}`, { status: res.status, store_name: data.store_name, items_count: data.items?.length, sale_start: data.sale_start, sale_end: data.sale_end, error: data.error, store_locations: data.store_locations });
           if(data.error) { toast.error(`File ${i+1}: ${data.error}`); continue; }
           if(i===0) {
             if(data.store_name) { setExtractedStoreName(data.store_name); await autoMatchStore(data.store_name, data.store_locations||[]); }
@@ -328,10 +327,8 @@ export default function PostDealPage() {
       } else {
         setExtractProgress("Extracting from URL...");
         const body = { store:selectedBrand?.name||"", url };
-        console.log("[PostDeal] extract: sending URL", { url });
         const res = await fetch("/api/extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
         const data = await res.json();
-        console.log("[PostDeal] extract: API response URL", { status: res.status, store_name: data.store_name, items_count: data.items?.length, error: data.error });
         if(data.error) throw new Error(data.error);
         if(data.store_name) { setExtractedStoreName(data.store_name); await autoMatchStore(data.store_name, data.store_locations||[]); }
         if(data.sale_start) setSaleStart(data.sale_start);
@@ -434,11 +431,11 @@ export default function PostDealPage() {
         dealId=deal.id;
       }
 
-      // Upsert items — existing (deal_id + normalized_name) are silently skipped
+      // Upsert items — server is warm by this point so use shorter timeout
       const{error:ie}=await timedRetry(()=>
         supabase.from("deal_items")
           .upsert(itemRows.map(r=>({...r,deal_id:dealId})),{onConflict:"deal_id,normalized_name",ignoreDuplicates:true})
-      );
+      , 20000, 2);
       if(ie) throw new Error(ie.message);
     }));
 
@@ -456,11 +453,11 @@ export default function PostDealPage() {
     if(noPrice.length>0){toast.error(`${noPrice.length} items have $0 price`);setEditingId(noPrice[0].id);setStep("review");return;}
     setPublishing(true);
     let connectingToast: string|undefined;
-    const connectingTimer = setTimeout(()=>{ connectingToast=toast.loading("Connecting to server...",{duration:300000}); },4000);
+    const connectingTimer = setTimeout(()=>{ connectingToast=toast.loading("Still publishing — server is waking up, please wait...",{duration:300000}); },12000);
     try{
       await doPublish(items);
     }catch(e:any){
-      toast.error(e.message||"Failed to publish.");
+      toast.error((e.message||"Failed to publish.") + " — tap Publish again to retry.");
     }finally{
       clearTimeout(connectingTimer);
       if(connectingToast) toast.dismiss(connectingToast);
