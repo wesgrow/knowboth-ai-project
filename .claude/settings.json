@@ -9,7 +9,9 @@
       "Bash(cart)",
       "Bash(expenses\" || echo \"No matches in api directory\")",
       "Bash(pwd -W)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Dines\\\\OneDrive\\\\Desktop\\\\My Projects\\\\knowboth-ai-project\\\\src\\\\app\" -Directory)",
+      "Bash(Select-Object -ExpandProperty Name)"
     ]
   }
 }

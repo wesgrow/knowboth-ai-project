@@ -19,26 +19,56 @@ export default function CartPage() {
   const { cart, removeFromCart, updateQty, clearCart, togglePurchased, moveToPantry, updateNotes, user } = useAppStore();
   const [showSummary, setShowSummary] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [savingsMap, setSavingsMap] = useState<Record<string, {price:number, store:string}>>({});
+  // highPriceMap: highest known price per normalized_name (for savings calc)
+  // cheapMap: cheapest price elsewhere per normalized_name (for "also at" hint)
+  const [highPriceMap, setHighPriceMap] = useState<Record<string, {price:number, label:string}>>({});
+  const [cheapMap, setCheapMap] = useState<Record<string, {price:number, store:string}>>({});
   const currency = user?.currency || "USD";
   const fmt = (n: number) => new Intl.NumberFormat("en-US",{style:"currency",currency}).format(n);
+  const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
 
   useEffect(() => {
-    const itemsWithPrice = cart.filter(i => (i.price || 0) > 0);
-    if (!itemsWithPrice.length) { setSavingsMap({}); return; }
-    const normNames = [...new Set(itemsWithPrice.map(i =>
-      i.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"")
-    ))];
-    Promise.resolve(
-      supabase.from("price_history").select("normalized_name,store_name,price").in("normalized_name", normNames)
-    ).then(({ data }) => {
-      if (!data) return;
-      const map: Record<string, {price:number, store:string}> = {};
-      for (const row of data) {
-        const ex = map[row.normalized_name];
-        if (!ex || row.price < ex.price) map[row.normalized_name] = { price: row.price, store: row.store_name };
+    const priced = cart.filter(i => (i.price||0) > 0);
+    if (!priced.length) { setHighPriceMap({}); setCheapMap({}); return; }
+    const normNames = [...new Set(priced.map(i => norm(i.name)))];
+    // price lookup keyed by normalized_name → cart price (for comparison)
+    const cartPriceByNorm: Record<string, number> = {};
+    priced.forEach(i => { cartPriceByNorm[norm(i.name)] = Math.min(cartPriceByNorm[norm(i.name)] ?? Infinity, i.price); });
+    const cartStoreByNorm: Record<string, string> = {};
+    priced.forEach(i => { cartStoreByNorm[norm(i.name)] = (i.store||"").toLowerCase(); });
+
+    Promise.all([
+      // Scenario 1+2: deal_items → regular_price AND other-store deal prices
+      supabase.from("deal_items").select("normalized_name,price,regular_price").in("normalized_name", normNames),
+      // Scenario 3: price_history → community prices (max & cheapest elsewhere)
+      supabase.from("price_history").select("normalized_name,store_name,price").in("normalized_name", normNames),
+    ]).then(([r1, r2]) => {
+      const hMap: Record<string, {price:number, label:string}> = {};
+      const cMap: Record<string, {price:number, store:string}> = {};
+
+      const bump = (n: string, price: number, label: string) => {
+        if (price > (cartPriceByNorm[n] ?? 0) && (!hMap[n] || price > hMap[n].price))
+          hMap[n] = { price, label };
+      };
+
+      // deal_items: check regular_price + all prices (highest = what others pay)
+      for (const row of r1.data || []) {
+        if (row.regular_price) bump(row.normalized_name, row.regular_price, "regular price");
+        bump(row.normalized_name, row.price, "other stores");
       }
-      setSavingsMap(map);
+
+      // price_history: max community price + cheapest elsewhere
+      for (const row of r2.data || []) {
+        const isSameStore = cartStoreByNorm[row.normalized_name] === (row.store_name||"").toLowerCase().trim();
+        bump(row.normalized_name, row.price, `at ${row.store_name}`);
+        if (!isSameStore) {
+          const ex = cMap[row.normalized_name];
+          if (!ex || row.price < ex.price) cMap[row.normalized_name] = { price: row.price, store: row.store_name };
+        }
+      }
+
+      setHighPriceMap(hMap);
+      setCheapMap(cMap);
     });
   }, [cart]);
 
@@ -215,12 +245,23 @@ export default function CartPage() {
                           <div style={{fontSize:14,fontWeight:700,color:"var(--gold)"}}>{fmt((item.price||0)*item.qty)}</div>
                           {item.qty > 1 && <div style={{fontSize:10,color:"var(--text3)"}}>{fmt(item.price)}/ea</div>}
                           {(()=>{
-                            const norm = item.name.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
-                            const cheaper = savingsMap[norm];
+                            const n = norm(item.name);
+                            const high = highPriceMap[n];
+                            if (!high) return null;
+                            const saved = high.price - (item.price||0);
+                            const pct = Math.round(saved / high.price * 100);
+                            return (
+                              <div style={{fontSize:10,color:"#30D158",fontWeight:700,marginTop:2,whiteSpace:"nowrap"}}>
+                                🏷️ {fmt(saved)}/ea off ({pct}%) vs {high.label}
+                              </div>
+                            );
+                          })()}
+                          {(()=>{
+                            const n = norm(item.name);
+                            const cheaper = cheapMap[n];
                             const iStore = (item.store||"").toLowerCase().trim();
-                            const cStore = (cheaper?.store||"").toLowerCase().trim();
-                            if (cheaper && (item.price||0) > 0 && cheaper.price < (item.price||0) && cStore !== iStore) {
-                              return <div style={{fontSize:10,color:"var(--green)",fontWeight:700,marginTop:2,whiteSpace:"nowrap"}}>Save {fmt((item.price||0)-cheaper.price)}/ea @ {cheaper.store}</div>;
+                            if (cheaper && cheaper.price < (item.price||0) && cheaper.store.toLowerCase().trim() !== iStore) {
+                              return <div style={{fontSize:10,color:"var(--blue)",fontWeight:600,marginTop:1,whiteSpace:"nowrap"}}>Also @ {cheaper.store} {fmt(cheaper.price)}</div>;
                             }
                             return null;
                           })()}
@@ -232,6 +273,27 @@ export default function CartPage() {
               </div>
             );
           })}
+
+          {/* Deal savings banner */}
+          {(()=>{
+            const dealSavingsTotal = cart.reduce((sum, item) => {
+              const high = highPriceMap[norm(item.name)];
+              if (high && high.price > (item.price||0)) return sum + (high.price - (item.price||0)) * item.qty;
+              return sum;
+            }, 0);
+            if (dealSavingsTotal <= 0) return null;
+            const dealItemCount = cart.filter(i => { const h = highPriceMap[norm(i.name)]; return h && h.price > (i.price||0); }).length;
+            return (
+              <div className="fade-up" style={{display:"flex",alignItems:"center",gap:12,background:"rgba(48,209,88,0.07)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:14,padding:"14px 18px",marginBottom:16}}>
+                <div style={{fontSize:28,flexShrink:0}}>🏷️</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:700,color:"#30D158"}}>You're saving {fmt(dealSavingsTotal)} on deals!</div>
+                  <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{dealItemCount} item{dealItemCount!==1?"s":""} at deal price vs regular price</div>
+                </div>
+                <div style={{fontSize:20,fontWeight:900,color:"#30D158",flexShrink:0}}>{fmt(dealSavingsTotal)}</div>
+              </div>
+            );
+          })()}
 
           {/* Checkout summary */}
           {cart.length > 0 && (
@@ -256,6 +318,20 @@ export default function CartPage() {
                       </div>
                     );
                   })}
+                  {(()=>{
+                    const ds = cart.reduce((sum,i)=>{
+                      const high = highPriceMap[norm(i.name)];
+                      if(high&&high.price>(i.price||0)) return sum+(high.price-(i.price||0))*i.qty;
+                      return sum;
+                    },0);
+                    if(ds<=0) return null;
+                    return (
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",background:"rgba(48,209,88,0.05)",borderTop:"0.5px solid rgba(48,209,88,0.15)"}}>
+                        <div style={{fontSize:12,fontWeight:600,color:"#30D158"}}>🏷️ Deal savings</div>
+                        <div style={{fontSize:13,fontWeight:700,color:"#30D158"}}>−{fmt(ds)}</div>
+                      </div>
+                    );
+                  })()}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px"}}>
                     <div>
                       <div style={{fontSize:13,fontWeight:600,color:"var(--text2)"}}>Total ({itemCount} items)</div>

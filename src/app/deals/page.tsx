@@ -313,7 +313,7 @@ function DealsContent() {
     const { item, qty, notes } = addingItem;
     const parsedQty = parseFloat(qty) || 1;
     addToCart(
-      { id: item.id, name: item.name, price: item.price, unit: item.unit || "ea", store: item.brand?.name || "", store_slug: item.brand?.slug || "", category: item.category || "Other", icon: "🛒" },
+      { id: item.id, name: item.name, price: item.price, regular_price: item.regular_price ?? null, unit: item.unit || "ea", store: item.brand?.name || "", store_slug: item.brand?.slug || "", category: item.category || "Other", icon: "🛒" },
       parsedQty,
       notes.trim() || undefined
     );
