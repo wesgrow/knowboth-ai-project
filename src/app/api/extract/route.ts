@@ -34,19 +34,28 @@ function extractJSON(text: string): any {
   }
 }
 
+function toTitleCase(str: string): string {
+  return str.replace(/\s+/g, " ").trim()
+    .replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
 function sanitizeItems(items: any[]): any[] {
   if (!Array.isArray(items)) return [];
   return items
     .filter(item => item && typeof item === "object")
-    .map((item, idx) => ({
-      name: String(item.name || `Item ${idx + 1}`).trim().slice(0, 200),
-      normalized_name: String(item.normalized_name || item.name || "").toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""),
-      price: Math.max(0, parseFloat(item.price) || 0),
-      regular_price: item.regular_price ? Math.max(0, parseFloat(item.regular_price)) : null,
-      unit: String(item.unit || "ea").trim().slice(0, 20),
-      category: VALID_CATEGORIES.includes(item.category) ? item.category : "Other",
-      notes: String(item.notes || "").trim().slice(0, 500),
-    }))
+    .map((item, idx) => {
+      const rawName = String(item.name || `Item ${idx + 1}`).trim();
+      const name = toTitleCase(rawName).slice(0, 200);
+      return {
+        name,
+        normalized_name: name.toLowerCase().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,""),
+        price: Math.max(0, parseFloat(item.price) || 0),
+        regular_price: item.regular_price ? Math.max(0, parseFloat(item.regular_price)) : null,
+        unit: String(item.unit || "ea").trim().slice(0, 20),
+        category: VALID_CATEGORIES.includes(item.category) ? item.category : "Other",
+        notes: String(item.notes || "").trim().slice(0, 500),
+      };
+    })
     .filter(item => item.name.length > 0);
 }
 
@@ -147,7 +156,7 @@ export async function POST(req: Request) {
     content.push({ type: "text", text: `Extract the store info, sale dates, and ALL deal items from this grocery flyer${storeName ? ` (store: ${storeName})` : ""}.
 
 Return ONLY valid JSON, no markdown, no backticks:
-{"store_name":"Patel Brothers","sale_start":"2026-04-30","sale_end":"2026-05-06","store_locations":[{"address":"2610 Patriot Blvd","city":"Glenview","state":"IL","zip":"60026","phone":""}],"items":[{"name":"Toor Dal 4lb","normalized_name":"toor dal 4lb","price":4.99,"regular_price":6.99,"unit":"bag","category":"Lentils & Dals","notes":""}]}
+{"store_name":"Patel Brothers","sale_start":"2026-04-30","sale_end":"2026-05-06","store_locations":[{"address":"2610 Patriot Blvd","city":"Glenview","state":"IL","zip":"60026","phone":""}],"items":[{"name":"Toor Dal","normalized_name":"toor dal","price":4.99,"regular_price":6.99,"unit":"bag","category":"Lentils & Dals","notes":"India Gate, 4 lb"}]}
 
 Category must be exactly one of: Vegetables, Fruits, Dairy, Rice & Grains, Lentils & Dals, Spices, Snacks, Beverages, Oils & Ghee, Frozen, Bakery, Meat & Fish, Household, Other.
 
@@ -163,8 +172,32 @@ Date rules:
 - If only one date is shown (e.g. "Valid 5/6"), treat it as sale_end.
 
 Item rules:
-- name = full product name with brand and size. Expand all abbreviations.
-- normalized_name = lowercase version of name
+HOW TO EXTRACT name:
+1. Look at the product text and identify what food or grocery item it is.
+2. Write the standard English name for that item — the name you would see on a plain grocery store shelf label, as it appears in a dictionary or a generic product search. Title Case.
+3. Everything else from the original text goes to notes.
+
+name  = standard English food/product name only. Nothing else.
+notes = all remaining details: brand, size, weight, packaging, condition, deal text, variety descriptors, origin words, marketing words — everything that is not the core food name.
+
+Examples — name | notes:
+  "India Gate Basmati Rice 20 LB"         → "Basmati Rice"   | "India Gate, 20 LB"
+  "Royal Basmati Rice 20 LB"              → "Basmati Rice"   | "Royal, 20 LB"
+  "IB Kabuli Chana 4 LB"                  → "Kabuli Chana"   | "IB, 4 LB"
+  "Deep Toor Dal 4lb Bag"                 → "Toor Dal"       | "Deep, 4 lb, Bag"
+  "MTR Rava Idli Mix 500g"                → "Rava Idli Mix"  | "MTR, 500g"
+  "India Gate Raw Rice 10 LB 2 for $9.99" → "Raw Rice"       | "India Gate, 10 LB, 2 for $9.99"
+  "Fresh Cilantro 5 for $1"               → "Cilantro"       | "Fresh, 5 for $1"
+  "Organic Baby Spinach 16 oz"            → "Spinach"        | "Organic, Baby, 16 oz"
+  "Green Bellpepper 3 for $1"             → "Bell Pepper"    | "Green, 3 for $1"
+  "Basmati Rice Classic 20 LB"            → "Basmati Rice"   | "Classic, 20 LB"
+  "Eggplant Indian $0.99/lb"              → "Eggplant"       | "Indian, $0.99/lb"
+  "Large Eggplant $1.49/lb"              → "Eggplant"       | "Large, $1.49/lb"
+  "Tomatoes 3 for $1"                    → "Tomatoes"       | "3 for $1"
+  "Whole Milk 1 Gallon"                  → "Whole Milk"     | "1 Gallon"
+  "Greek Yogurt 32 oz"                   → "Greek Yogurt"   | "32 oz"
+
+- normalized_name = lowercase of name
 - price = sale/deal price as a number (required, must be > 0)
 - regular_price = original price before sale (null if not shown)
 - unit = one of: lb, kg, oz, bag, pack, box, bottle, jar, bunch, ea, gallon, liter, dozen

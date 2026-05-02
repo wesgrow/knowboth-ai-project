@@ -12,7 +12,7 @@ const SORTS = [{v:"newest",l:"Newest"},{v:"price_asc",l:"Price ↑"},{v:"savings
 const PRICE_ORDER = ["Under $1","$1 – $3","$3 – $10","$10 – $25","Over $25"];
 const PAGE_SIZE = 40;
 type View = "list"|"table"|"cards";
-type GroupBy = "category"|"store"|"price";
+type GroupBy = "category"|"store"|"price"|"item";
 
 function Sparkline({ data, w=52, h=22 }: { data:number[]; w?:number; h?:number }) {
   if (data.length < 2) return null;
@@ -35,7 +35,7 @@ function DealsContent() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("list");
-  const [groupBy, setGroupBy] = useState<GroupBy>("category");
+  const [groupBy, setGroupBy] = useState<GroupBy>("item");
   const [search, setSearch] = useState(params.get("q") || "");
   const [cat, setCat] = useState("All");
   const [storeFilter, setStoreFilter] = useState("All");
@@ -70,6 +70,8 @@ function DealsContent() {
   const [page, setPage] = useState(1);
   const [addingItem, setAddingItem] = useState<{item:any;qty:string;notes:string}|null>(null);
   const { addToCart, cart } = useAppStore();
+  const [userId, setUserId] = useState<string|null>(null);
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setUserId(data?.user?.id || null)); }, []);
 
   useEffect(() => { fetchDeals(); }, []);
   useEffect(() => { setPage(1); }, [search, cat, storeFilter, sort, maxPrice, onSale, expiringSoon, freshToday, groupBy]);
@@ -120,7 +122,7 @@ function DealsContent() {
     setLoading(true);
     try {
       const { data: dealRows, error: e1 } = await timedRetry(() =>
-        supabase.from("deals").select("id,sale_end,sale_start,brand_id").eq("status","approved")
+        supabase.from("deals").select("id,sale_end,sale_start,brand_id,posted_by").eq("status","approved")
       ) as any;
       if (e1) throw new Error(`Deals: ${e1.message}`);
       if (!dealRows?.length) { setItems([]); return; }
@@ -131,7 +133,7 @@ function DealsContent() {
 
       const [r1, r2, r3] = await Promise.all([
         timedRetry(() => supabase.from("brands").select("id,name,slug").in("id", brandIds)),
-        timedRetry(() => supabase.from("deal_items").select("id,deal_id,name,normalized_name,price,regular_price,unit,category,savings_pct,created_at,source").in("deal_id", dealIds).order("created_at",{ascending:false})),
+        timedRetry(() => supabase.from("deal_items").select("id,deal_id,name,normalized_name,price,regular_price,unit,category,savings_pct,notes,created_at,source").in("deal_id", dealIds).order("created_at",{ascending:false})),
         timedRetry(() => supabase.from("expense_items").select("name,price")),
       ]) as any[];
       if (r1.error) throw new Error(`Brands: ${r1.error.message}`);
@@ -175,6 +177,15 @@ function DealsContent() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function deleteDeal(dealId: string) {
+    if (!confirm("Delete this deal and all its items? This cannot be undone.")) return;
+    const { error } = await supabase.from("deal_items").delete().eq("deal_id", dealId);
+    if (error) { toast.error("Failed to delete deal"); return; }
+    await supabase.from("deals").delete().eq("id", dealId);
+    setItems(prev => prev.filter(i => i.deal_id !== dealId));
+    toast.success("Deal deleted — you can now reupload a fresh flyer");
   }
 
   function dL(s: string | null) { if (!s) return null; return Math.ceil((new Date(s).getTime() - Date.now()) / 86400000); }
@@ -231,34 +242,49 @@ function DealsContent() {
     return "Over $25";
   }
   function groupKey(item: any) {
+    if (groupBy === "item")  return "All Items";
     if (groupBy === "store") return item.brand?.name || "Unknown Store";
     if (groupBy === "price") return priceRange(item.price || 0);
     return item.category || "Other";
   }
 
-  // Paginate posted deals before grouping
+  // Group ALL filtered deal items first so same-name items from different stores always land in the same group
   const dealFiltered = filtered.filter(i => !i.from_price_history);
-  const totalPages = Math.max(1, Math.ceil(dealFiltered.length / PAGE_SIZE));
-  const pagedItems = dealFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  // Group posted deals by chosen dimension → item
-  const groupedRaw: Record<string, Record<string, any[]>> = {};
-  pagedItems.forEach(item => {
+  const allGroupedRaw: Record<string, Record<string, any[]>> = {};
+  dealFiltered.forEach(item => {
     const gk = groupKey(item);
     const ik = item.normalized_name || item.name?.toLowerCase() || "";
-    if (!groupedRaw[gk]) groupedRaw[gk] = {};
-    if (!groupedRaw[gk][ik]) groupedRaw[gk][ik] = [];
-    groupedRaw[gk][ik].push(item);
+    if (!allGroupedRaw[gk]) allGroupedRaw[gk] = {};
+    if (!allGroupedRaw[gk][ik]) allGroupedRaw[gk][ik] = [];
+    allGroupedRaw[gk][ik].push(item);
   });
-  Object.values(groupedRaw).forEach(cg => { Object.values(cg).forEach(arr => arr.sort((a, b) => a.price - b.price)); });
+  Object.values(allGroupedRaw).forEach(cg => { Object.values(cg).forEach(arr => arr.sort((a, b) => a.price - b.price)); });
 
   // Sort group keys: price ranges use fixed order, others alphabetical
-  const sortedGroupKeys = Object.keys(groupedRaw).sort((a, b) =>
+  const sortedGroupKeys = Object.keys(allGroupedRaw).sort((a, b) =>
     groupBy === "price"
       ? PRICE_ORDER.indexOf(a) - PRICE_ORDER.indexOf(b)
       : a.localeCompare(b)
   );
-  const grouped = Object.fromEntries(sortedGroupKeys.map(k => [k, groupedRaw[k]]));
+  const allGroupedSorted = Object.fromEntries(sortedGroupKeys.map(k => {
+    const entries = Object.entries(allGroupedRaw[k]);
+    if (groupBy === "item") entries.sort(([a], [b]) => a.localeCompare(b));
+    return [k, Object.fromEntries(entries)];
+  }));
+
+  // Paginate by unique item rows (not individual items) so a grouped row is never split across pages
+  const allItemKeys = sortedGroupKeys.flatMap(gk =>
+    Object.keys(allGroupedSorted[gk]).map(ik => [gk, ik] as [string, string])
+  );
+  const totalPages = Math.max(1, Math.ceil(allItemKeys.length / PAGE_SIZE));
+  const pagedItemKeys = allItemKeys.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Build paged grouped structure for rendering (preserves sorted insertion order)
+  const grouped: Record<string, Record<string, any[]>> = {};
+  pagedItemKeys.forEach(([gk, ik]) => {
+    if (!grouped[gk]) grouped[gk] = {};
+    grouped[gk][ik] = allGroupedSorted[gk][ik];
+  });
 
   // Group community prices by item name (flat, no category split)
   const communityGrouped: Record<string, any[]> = {};
@@ -343,7 +369,7 @@ function DealsContent() {
                 <div className="group-by-controls" style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <div className="group-by-sep" style={{ width:1, height:18, background:"#E5E5EA", flexShrink:0 }}/>
                   <span style={{ fontSize:11, color:"#AEAEB2", fontWeight:600, flexShrink:0 }}>Group by</span>
-                  {([["category","📂 Category"],["store","🏪 Store"],["price","💰 Price"]] as const).map(([v,l]) => (
+                  {([["category","📂 Category"],["store","🏪 Store"],["price","💰 Price"],["item","📦 Item"]] as const).map(([v,l]) => (
                     <button key={v} onClick={() => setGroupBy(v)}
                       style={{ padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:600, border:"none", cursor:"pointer", flexShrink:0,
                         background: groupBy===v ? "#FF9F0A" : "#fff",
@@ -465,17 +491,20 @@ function DealsContent() {
             {view === "list" && Object.entries(grouped).map(([category, itemGroups]) => {
               const isCollapsed = collapsedGroups.has(category);
               const itemCount = Object.values(itemGroups).flat().length;
+              const isItemView = groupBy === "item";
               return (
               <div key={category} style={{ marginBottom: 16 }}>
-                <button onClick={()=>toggleGroup(category)}
-                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--surf)",border:"1px solid var(--border)",borderRadius:10,cursor:"pointer",padding:"10px 14px",fontFamily:"inherit",boxShadow:"var(--shadow)",marginBottom:6}}>
-                  <span style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{category}</span>
-                    <span style={{fontSize:11,color:"var(--text3)",background:"var(--bg)",borderRadius:20,padding:"2px 8px",fontWeight:600}}>{itemCount}</span>
-                  </span>
-                  <span style={{fontSize:13,color:"var(--text3)",fontWeight:700,transition:"transform .2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▾</span>
-                </button>
-                {!isCollapsed && <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                {!isItemView && (
+                  <button onClick={()=>toggleGroup(category)}
+                    style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--surf)",border:"1px solid var(--border)",borderRadius:10,cursor:"pointer",padding:"10px 14px",fontFamily:"inherit",boxShadow:"var(--shadow)",marginBottom:6}}>
+                    <span style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{category}</span>
+                      <span style={{fontSize:11,color:"var(--text3)",background:"var(--bg)",borderRadius:20,padding:"2px 8px",fontWeight:600}}>{itemCount}</span>
+                    </span>
+                    <span style={{fontSize:13,color:"var(--text3)",fontWeight:700,transition:"transform .2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▾</span>
+                  </button>
+                )}
+                {(isItemView || !isCollapsed) && <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                   {Object.entries(itemGroups).map(([itemKey, storeItems], idx, arr) => {
                     const cheapestItem = storeItems[0];
                     const otherStores = storeItems.slice(1);
@@ -495,7 +524,9 @@ function DealsContent() {
                             <div style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                               {cheapestItem.name}{cheapestItem.verified && <span title="Price verified by community receipt" style={{marginLeft:5,fontSize:12}}>✅</span>}
                             </div>
+                            {cheapestItem.notes && <div style={{ fontSize: 11, color: "#AEAEB2", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cheapestItem.notes}</div>}
                             <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2, flexWrap: "wrap" as const }}>
+                              {isItemView && cheapestItem.category && <span style={{ fontSize: 9, fontWeight: 600, color: "#6D6D72", background: "#F2F2F7", borderRadius: 20, padding: "1px 7px", flexShrink: 0 }}>{cheapestItem.category}</span>}
                               <span onClick={e=>{e.stopPropagation();openStoreSheet(cheapestItem.brand);}} style={{ fontSize: 12, fontWeight: 600, color: "#FF9F0A", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted" }}>🏆 {cheapestItem.brand?.name} 📍</span>
                               <span className={`pill fresh-${fr.level}`} style={{ fontSize: 9, padding: "1px 6px" }}>{fr.label}</span>
                               {sav && <span style={{ fontSize: 9, fontWeight: 600, color: "#30D158" }}>-{sav}%</span>}
@@ -512,6 +543,11 @@ function DealsContent() {
                           <button onClick={() => addItem(cheapestItem)} style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, background: inCart ? "#F2F2F7" : "#FF9F0A", color: inCart ? "#AEAEB2" : "#fff" }}>
                             {inCart ? "✓" : "+ Add"}
                           </button>
+                          {userId && cheapestItem.deal?.posted_by === userId && (
+                            <button onClick={() => deleteDeal(cheapestItem.deal_id)} title="Delete this deal" style={{ padding: "7px 10px", borderRadius: 9, fontSize: 13, border: "none", cursor: "pointer", flexShrink: 0, background: "rgba(255,59,48,0.08)", color: "#FF3B30" }}>
+                              🗑️
+                            </button>
+                          )}
                         </div>
 
                         {/* Expand button if other stores exist */}
@@ -535,6 +571,7 @@ function DealsContent() {
                               <div style={{ width: 3, height: 32, borderRadius: 2, background: storeColor, flexShrink: 0 }} />
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: "#6D6D72" }}>{store.brand?.name}</div>
+                                {store.notes && <div style={{ fontSize: 11, color: "#AEAEB2", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{store.notes}</div>}
                                 <div style={{ fontSize: 10, color: "#AEAEB2" }}>{src(store.source, store.from_price_history)} · {ago(store.deal?.sale_start || store.created_at)} ago</div>
                               </div>
                               <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -558,7 +595,7 @@ function DealsContent() {
             {totalPages > 1 && (
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 2px", marginBottom:8, flexWrap:"wrap" as const, gap:8 }}>
                 <span style={{ fontSize:12, color:"#AEAEB2", fontWeight:500 }}>
-                  Showing {(page-1)*PAGE_SIZE+1}–{Math.min(page*PAGE_SIZE, dealFiltered.length)} of {dealFiltered.length} items
+                  Showing {(page-1)*PAGE_SIZE+1}–{Math.min(page*PAGE_SIZE, allItemKeys.length)} of {allItemKeys.length} items
                 </span>
                 <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                   <button disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))}
