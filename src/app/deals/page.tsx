@@ -516,10 +516,10 @@ function DealsContent() {
                     const dl = dL(cheapestItem.deal?.sale_end);
 
                     return (
-                      <div key={itemKey} style={{ borderBottom: idx < arr.length - 1 ? "0.5px solid #F2F2F7" : "none" }}>
+                      <div key={itemKey} style={{ borderBottom: idx < arr.length - 1 ? "0.5px solid #F2F2F7" : "none", background: otherStores.length > 0 ? "rgba(0,122,255,0.04)" : "transparent" }}>
                         {/* Cheapest store row — always visible */}
                         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
-                          <div style={{ width: 3, height: 40, borderRadius: 2, background: color, flexShrink: 0 }} />
+                          <div style={{ width: 3, height: 40, borderRadius: 2, background: otherStores.length > 0 ? "#007AFF" : color, flexShrink: 0 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                               {cheapestItem.name}{cheapestItem.verified && <span title="Price verified by community receipt" style={{marginLeft:5,fontSize:12}}>✅</span>}
@@ -527,6 +527,7 @@ function DealsContent() {
                             {cheapestItem.notes && <div style={{ fontSize: 11, color: "#AEAEB2", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cheapestItem.notes}</div>}
                             <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2, flexWrap: "wrap" as const }}>
                               {isItemView && cheapestItem.category && <span style={{ fontSize: 9, fontWeight: 600, color: "#6D6D72", background: "#F2F2F7", borderRadius: 20, padding: "1px 7px", flexShrink: 0 }}>{cheapestItem.category}</span>}
+                              {otherStores.length > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: "#007AFF", background: "rgba(0,122,255,0.1)", borderRadius: 20, padding: "1px 7px", flexShrink: 0 }}>🔀 {storeItems.length} stores</span>}
                               <span onClick={e=>{e.stopPropagation();openStoreSheet(cheapestItem.brand);}} style={{ fontSize: 12, fontWeight: 600, color: "#FF9F0A", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted" }}>🏆 {cheapestItem.brand?.name} 📍</span>
                               <span className={`pill fresh-${fr.level}`} style={{ fontSize: 9, padding: "1px 6px" }}>{fr.label}</span>
                               {sav && <span style={{ fontSize: 9, fontWeight: 600, color: "#30D158" }}>-{sav}%</span>}
@@ -552,11 +553,10 @@ function DealsContent() {
 
                         {/* Expand button if other stores exist */}
                         {otherStores.length > 0 && (
-                          <button onClick={() => toggleExpand(itemKey)} style={{ width: "100%", background: isExpanded ? "rgba(255,159,10,0.04)" : "#FAFAFA", border: "none", borderTop: "0.5px solid #F2F2F7", padding: "8px 16px", fontSize: 12, fontWeight: 600, color: "#6D6D72", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span>{isExpanded ? "Hide" : `▼ Also at ${otherStores.length} more store${otherStores.length > 1 ? "s" : ""}`}</span>
-                            <span style={{ fontSize: 11 }}>
+                          <button onClick={() => toggleExpand(itemKey)} style={{ width: "100%", background: isExpanded ? "rgba(0,122,255,0.08)" : "rgba(0,122,255,0.04)", border: "none", borderTop: "0.5px solid rgba(0,122,255,0.12)", padding: "8px 16px", fontSize: 12, fontWeight: 600, color: "#007AFF", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span>{isExpanded ? "▲ Hide stores" : `▼ Also at ${otherStores.length} more store${otherStores.length > 1 ? "s" : ""}`}</span>
+                            <span style={{ fontSize: 11, color: "rgba(0,122,255,0.7)" }}>
                               {!isExpanded && otherStores.map(s => `${s.brand?.name} $${s.price?.toFixed(2)}`).join(" · ")}
-                              {isExpanded && "▲ Collapse"}
                             </span>
                           </button>
                         )}
