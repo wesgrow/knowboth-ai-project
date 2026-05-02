@@ -151,9 +151,17 @@ function DealsContent() {
         verified: verifiedSet.has(`${i.name?.toLowerCase().trim()}|${Number(i.price).toFixed(2)}`),
         sparkline: sparkMap[i.normalized_name] || [],
       }));
-      console.log("[Deals] fetchDeals result:", { deals: dealRows?.length, brands: brands?.length, dealItems: dealItems?.length, sample: withSpark.slice(0,3).map((i:any)=>({ name:i.name, brand:i.brand?.name, sale_end:i.deal?.sale_end })) });
-      setItems(withSpark);
-      setStores([...new Set(withSpark.map((i: any) => i.brand?.name).filter(Boolean))] as string[]);
+      // Deduplicate: same item from the same brand across multiple deals → keep cheapest
+      const deduped: any[] = Object.values(
+        withSpark.reduce((acc: Record<string, any>, item: any) => {
+          const key = `${item.normalized_name || item.name?.toLowerCase() || ""}||${item.brand?.id || item.brand?.name || ""}`;
+          if (!acc[key] || item.price < acc[key].price) acc[key] = item;
+          return acc;
+        }, {})
+      );
+      console.log("[Deals] fetchDeals result:", { deals: dealRows?.length, brands: brands?.length, dealItems: dealItems?.length, deduped: deduped.length });
+      setItems(deduped);
+      setStores([...new Set(deduped.map((i: any) => i.brand?.name).filter(Boolean))] as string[]);
     } catch(e: any) {
       toast.error(e.message || "Failed to load deals — tap to retry");
     } finally {

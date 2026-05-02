@@ -386,6 +386,15 @@ export default function PostDealPage() {
 
   const normalizeStr=(s:string)=>s.toLowerCase().trim().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
 
+  function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+      ),
+    ]);
+  }
+
   async function doPublish(itemsToPublish: DealItem[]) {
     if(!selectedBrand||itemsToPublish.length===0) throw new Error("Nothing to publish");
 
@@ -404,40 +413,45 @@ export default function PostDealPage() {
       notes:i.notes||null, source:uploadMode==="image"?"flyer":"manual",
     }));
 
-    await Promise.all(locIds.map(async(locId)=>{
+    for (const locId of locIds) {
       // Find existing deal for this brand+date+location, or create one
-      const{data:existing}=await timedRetry(()=>{
-        const q=supabase.from("deals").select("id")
-          .eq("brand_id",selectedBrand!.id)
-          .eq("sale_start",saleStart)
-          .eq("applies_to_all_locations",locationMode==="all");
-        return locId?(q as any).eq("location_id",locId).limit(1):(q as any).is("location_id",null).limit(1);
-      }) as {data:{id:string}[]|null};
+      const q = supabase.from("deals").select("id")
+        .eq("brand_id", selectedBrand.id)
+        .eq("sale_start", saleStart)
+        .eq("applies_to_all_locations", locationMode==="all");
+      const selectQ = locId ? (q as any).eq("location_id", locId).limit(1) : (q as any).is("location_id", null).limit(1);
+      const { data: existing, error: se } = await withTimeout<any>(Promise.resolve(selectQ), 15000, "deal lookup");
+      if (se) throw new Error(se.message);
 
       let dealId: string;
-      if(existing&&existing.length>0){
-        dealId=existing[0].id;
+      if (existing && existing.length > 0) {
+        dealId = existing[0].id;
       } else {
-        const dealPayload:any={
-          brand_id:selectedBrand!.id, posted_by:session.user.id, status:"approved",
-          applies_to_all_locations:locationMode==="all",
-          sale_start:saleStart, sale_end:saleEnd||null,
+        const dealPayload: any = {
+          brand_id: selectedBrand.id, posted_by: session.user.id, status: "approved",
+          applies_to_all_locations: locationMode==="all",
+          sale_start: saleStart, sale_end: saleEnd||null,
         };
-        if(locId) dealPayload.location_id=locId;
-        const{data:deal,error:de}=await timedRetry(()=>
-          supabase.from("deals").insert(dealPayload).select("id").single()
+        if (locId) dealPayload.location_id = locId;
+        const { data: deal, error: de } = await withTimeout<any>(
+          Promise.resolve(supabase.from("deals").insert(dealPayload).select("id").single()),
+          15000, "deal insert"
         );
-        if(de||!deal?.id) throw new Error(de?.message||"Failed to create deal");
-        dealId=deal.id;
+        if (de || !deal?.id) throw new Error(de?.message || "Failed to create deal");
+        dealId = deal.id;
       }
 
-      // Upsert items — server is warm by this point so use shorter timeout
-      const{error:ie}=await timedRetry(()=>
-        supabase.from("deal_items")
-          .upsert(itemRows.map(r=>({...r,deal_id:dealId})),{onConflict:"deal_id,normalized_name",ignoreDuplicates:true})
-      , 20000, 2);
-      if(ie) throw new Error(ie.message);
-    }));
+      // Upsert in batches of 50 to avoid payload-size hangs
+      const rows = itemRows.map(r => ({ ...r, deal_id: dealId }));
+      for (let i = 0; i < rows.length; i += 50) {
+        const batch = rows.slice(i, i + 50);
+        const { error: ie } = await withTimeout<any>(
+          Promise.resolve(supabase.from("deal_items").upsert(batch, { onConflict: "deal_id,normalized_name", ignoreDuplicates: true })),
+          20000, `items upsert batch ${Math.floor(i / 50) + 1}`
+        );
+        if (ie) throw new Error(ie.message);
+      }
+    }
 
     const branchMsg = locIds.length>1?` across ${locIds.length} branches`:"";
     toast.success(`🚀 ${itemsToPublish.length} deal${itemsToPublish.length>1?"s":""} published${branchMsg}!`);
@@ -452,15 +466,12 @@ export default function PostDealPage() {
     const noPrice=items.filter(i=>i.price<=0);
     if(noPrice.length>0){toast.error(`${noPrice.length} items have $0 price`);setEditingId(noPrice[0].id);setStep("review");return;}
     setPublishing(true);
-    let connectingToast: string|undefined;
-    const connectingTimer = setTimeout(()=>{ connectingToast=toast.loading("Still publishing — server is waking up, please wait...",{duration:300000}); },12000);
-    try{
+    try {
       await doPublish(items);
-    }catch(e:any){
-      toast.error((e.message||"Failed to publish.") + " — tap Publish again to retry.");
-    }finally{
-      clearTimeout(connectingTimer);
-      if(connectingToast) toast.dismiss(connectingToast);
+    } catch(e: any) {
+      console.error("publish error:", e);
+      toast.error(e.message || "Failed to publish — tap Publish again to retry.");
+    } finally {
       setPublishing(false);
     }
   }

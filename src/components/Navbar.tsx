@@ -31,7 +31,7 @@ const BOTTOM_TABS = [
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, cart, radius, updateLocation, updateRadius } = useAppStore();
+  const { user, setUser, cart, radius, updateLocation, updateRadius } = useAppStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -188,15 +188,10 @@ export function Navbar() {
 
         {/* User card */}
         <div className="sidebar-user" onClick={()=>{router.push("/profile");setSidebarOpen(false);}}>
-          <div style={{width:40,height:40,borderRadius:12,background:"var(--gold-bg)",border:"1px solid rgba(255,159,10,0.18)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>
-            {user?.avatar||"🧑‍🍳"}
-          </div>
+          <div className="sidebar-avatar">{user?.avatar||"🧑‍🍳"}</div>
           <div style={{flex:1,minWidth:0}}>
             <div className="sidebar-user-name">{user?.name||"User"}</div>
-            <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}>
-              <span style={{fontSize:9,color:"var(--text3)",fontWeight:500}}>{level}</span>
-              <span style={{background:"var(--gold-bg)",color:"var(--gold)",borderRadius:20,padding:"1px 6px",fontSize:8,fontWeight:700,lineHeight:"1.6"}}>✦ {user?.points||0} pts</span>
-            </div>
+            <div className="sidebar-user-pts">{level} · ✦ {user?.points||0} pts</div>
           </div>
           <span style={{color:"var(--text3)",fontSize:11}}>›</span>
         </div>
@@ -254,7 +249,7 @@ export function Navbar() {
           {/* Location trigger */}
           <button ref={mobileLocBtnRef} onClick={()=>setShowLocation(s=>!s)}
             aria-label={`Change location, currently ${user?.city||"unknown"}`}
-            style={{display:"flex",alignItems:"center",gap:4,padding:"5px 9px",borderRadius:10,background:"var(--bg)",border:"1px solid var(--border)",cursor:"pointer",fontSize:11,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
+            style={{display:"flex",alignItems:"center",gap:4,padding:"5px 9px",borderRadius:10,background:"var(--bg)",border:"0.5px solid var(--border)",cursor:"pointer",fontSize:11,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
             <span style={{fontSize:13}}>📍</span>
             <span style={{maxWidth:90,overflow:"hidden",textOverflow:"ellipsis"}}>{user?.city||"Location"}</span>
             <span style={{fontSize:9,color:"var(--text3)"}}>{radius}mi</span>
@@ -303,7 +298,7 @@ export function Navbar() {
           {/* Location + Radius */}
           <button ref={desktopLocBtnRef} onClick={()=>setShowLocation(s=>!s)}
             aria-label={`Change location, currently ${user?.city||"unknown"}`}
-            style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:"var(--bg)",border:"1px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
+            style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:"var(--bg)",border:"0.5px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
             <span style={{fontSize:14}}>📍</span>
             <span>{user?.city||"Set location"}</span>
             <span style={{fontSize:10,color:"var(--text3)",background:"var(--surf)",borderRadius:6,padding:"1px 5px"}}>{radius}mi</span>
@@ -319,7 +314,7 @@ export function Navbar() {
 
       {/* ── MOBILE BOTTOM NAV ── */}
       <nav className="bnav">
-        {BOTTOM_TABS.map((tab:any)=>{
+        {BOTTOM_TABS.map((tab:any,i)=>{
           if(tab.scan) return(
             <div key="scan" className="nav-fab-wrap">
               <button className="nav-fab" aria-label="Scan bill" onClick={()=>router.push("/scan")}>🧾</button>
@@ -361,7 +356,7 @@ export function Navbar() {
               onKeyDown={e=>e.key==="Enter"&&lookupZip()}
               placeholder="Enter zip code"
               maxLength={5}
-              style={{flex:1,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:9,padding:"8px 10px",fontSize:12,color:"var(--text)",outline:"none"}}
+              style={{flex:1,background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:9,padding:"8px 10px",fontSize:12,color:"var(--text)",outline:"none"}}
             />
             <button onClick={lookupZip} disabled={locLoading||manualZip.length<5}
               style={{padding:"8px 12px",background:"var(--gold)",border:"none",borderRadius:9,fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",opacity:manualZip.length<5?0.45:1,whiteSpace:"nowrap" as const}}>
@@ -395,7 +390,7 @@ export function Navbar() {
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(85px,1fr))",gap:8,marginBottom:12}}>
               {[...NAV_MORE,{href:"/profile",icon:"👤",label:"Profile"}].map(item=>(
                 <div key={item.href} onClick={()=>{router.push(item.href);setShowMore(false);}}
-                  style={{display:"flex",flexDirection:"column" as const,alignItems:"center",gap:5,padding:"12px 8px",borderRadius:12,background:"var(--bg)",border:"1px solid var(--border)",boxShadow:"var(--shadow)",cursor:"pointer"}}>
+                  style={{display:"flex",flexDirection:"column" as const,alignItems:"center",gap:5,padding:"12px 8px",borderRadius:12,background:"var(--bg)",cursor:"pointer"}}>
                   <span style={{fontSize:22}}>{item.icon}</span>
                   <span style={{fontSize:10,fontWeight:600,color:"var(--text2)"}}>{item.label}</span>
                 </div>
@@ -403,12 +398,12 @@ export function Navbar() {
             </div>
             <div style={{display:"flex",gap:8}}>
               <div onClick={toggleTheme}
-                style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,background:"var(--bg)",border:"1px solid var(--border)",cursor:"pointer"}}>
+                style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,background:"var(--bg)",cursor:"pointer"}}>
                 <span style={{fontSize:18}}>{theme==="light"?"🌙":"☀️"}</span>
                 <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>{theme==="light"?"Dark":"Light"}</span>
               </div>
               <div onClick={logout}
-                style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,background:"rgba(255,59,48,0.06)",border:"1px solid rgba(255,59,48,0.15)",cursor:"pointer"}}>
+                style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,background:"rgba(255,59,48,0.06)",cursor:"pointer"}}>
                 <span style={{fontSize:18}}>🚪</span>
                 <span style={{fontSize:12,fontWeight:600,color:"var(--red)"}}>Sign Out</span>
               </div>
