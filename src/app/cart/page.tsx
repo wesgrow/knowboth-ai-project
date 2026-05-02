@@ -46,6 +46,8 @@ export default function CartPage() {
     try {
       const { data: { session } } = await supabaseAuth.auth.getSession();
       if (!session) return toast.error("Sign in required");
+      const { data: dup } = await supabase.from("expense_items").select("id").ilike("name", item.name).limit(1);
+      if (dup?.length && !window.confirm(`"${item.name}" may already be in expenses. Add anyway?`)) return;
       const { data: exp, error: e1 } = await supabase.from("expenses").insert({
         user_id: session.user.id,
         store_name: item.store || "Unknown",
@@ -188,7 +190,7 @@ export default function CartPage() {
                           <button className="cart-action-btn" onClick={()=>{moveToPantry(item);toast.success(`${item.name} moved to stock`);}}
                             style={{background:"rgba(48,209,88,.1)",color:"var(--green)"}}>📦 Stock</button>
                           <button className="cart-action-btn" onClick={()=>logAsExpense(item)}
-                            style={{background:"rgba(10,132,255,.1)",color:"var(--blue)"}}>💸 Expense</button>
+                            style={{background:"rgba(10,132,255,.1)",color:"var(--blue)"}}>💸 Add to Expenses</button>
                           <button onClick={()=>{removeFromCart(item.id);toast(`${item.name} removed`);}}
                             style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:14,padding:"2px 5px",lineHeight:1,fontFamily:"inherit"}}>✕</button>
                         </div>

@@ -42,14 +42,17 @@ export function Navbar() {
   const [manualZip, setManualZip] = useState("");
   const locationRef = useRef<HTMLDivElement>(null);
   const mobileLocBtnRef = useRef<HTMLButtonElement>(null);
-  const desktopLocBtnRef = useRef<HTMLButtonElement>(null);
+  const sidebarLocBtnRef = useRef<HTMLDivElement>(null);
   const cartCount = cart?.filter((i:any)=>!i.purchased)?.length || 0;
   const level = getLevel(user?.points||0);
 
   useEffect(()=>{
     if(window.innerWidth<=768) return;
+    const ml = sidebarHidden ? '0' : (collapsed ? '56px' : 'var(--sidebar-w)');
     const mc = document.querySelector('.main-content') as HTMLElement;
-    if(mc) mc.style.marginLeft = sidebarHidden ? '0' : (collapsed ? '52px' : 'var(--sidebar-w)');
+    const th = document.querySelector('.top-header') as HTMLElement;
+    if(mc) mc.style.marginLeft = ml;
+    if(th) th.style.marginLeft = ml;
   },[collapsed, sidebarHidden]);
 
   useEffect(()=>{
@@ -68,8 +71,8 @@ export function Navbar() {
       const t=e.target as Node;
       if(
         locationRef.current&&!locationRef.current.contains(t)&&
-        mobileLocBtnRef.current&&!mobileLocBtnRef.current.contains(t)&&
-        desktopLocBtnRef.current&&!desktopLocBtnRef.current.contains(t)
+        !mobileLocBtnRef.current?.contains(t)&&
+        !sidebarLocBtnRef.current?.contains(t)
       ) setShowLocation(false);
     }
     document.addEventListener("mousedown",handleClick);
@@ -176,27 +179,19 @@ export function Navbar() {
             <div className="sidebar-logo-name">KNOWBOTH<span>.AI</span></div>
             <div className="sidebar-logo-tag">Know Your Savings. Know Your Spending.</div>
           </div>
-          {/* Desktop collapse */}
-          <button className="sidebar-desktop-collapse" onClick={toggleCollapse} title={collapsed?"Expand sidebar":"Collapse sidebar"}
-            onMouseEnter={e=>(e.currentTarget.style.background="var(--gold)",e.currentTarget.style.color="#fff")}
-            onMouseLeave={e=>(e.currentTarget.style.background="var(--bg)",e.currentTarget.style.color="var(--text3)")}>
-            {collapsed?"›":"‹"}
+        </div>
+
+        {/* Quick actions */}
+        <div className="sidebar-actions">
+          <button className="sidebar-action-primary" onClick={()=>{router.push("/post-deal");closeSidebar();}}>
+            <span>📷</span><span className="sidebar-item-label">Post Deal</span>
           </button>
-          {/* Close — works on both desktop and mobile */}
-          <button className="sidebar-close-btn" onClick={closeSidebar}>✕</button>
+          <button className="sidebar-action-secondary" onClick={()=>{router.push("/scan");closeSidebar();}}>
+            <span>🧾</span><span className="sidebar-item-label">Scan</span>
+          </button>
         </div>
 
-        {/* User card */}
-        <div className="sidebar-user" onClick={()=>{router.push("/profile");setSidebarOpen(false);}}>
-          <div className="sidebar-avatar">{user?.avatar||"🧑‍🍳"}</div>
-          <div style={{flex:1,minWidth:0}}>
-            <div className="sidebar-user-name">{user?.name||"User"}</div>
-            <div className="sidebar-user-pts">{level} · ✦ {user?.points||0} pts</div>
-          </div>
-          <span style={{color:"var(--text3)",fontSize:11}}>›</span>
-        </div>
-
-        {/* Nav */}
+        {/* Nav — scrollable middle */}
         <nav className="sidebar-nav">
           <div className="sidebar-section-title">Main</div>
           {NAV_MAIN.map(item=>(
@@ -209,7 +204,6 @@ export function Navbar() {
               {item.badge&&cartCount>0&&<span className="sidebar-badge">{cartCount}</span>}
             </Link>
           ))}
-
           <div className="sidebar-divider"/>
           <div className="sidebar-section-title">More</div>
           {NAV_MORE.map(item=>(
@@ -221,22 +215,31 @@ export function Navbar() {
               <span className="sidebar-item-label">{item.label}</span>
             </Link>
           ))}
+        </nav>
 
-          <div className="sidebar-divider"/>
-          <div className="sidebar-section-title">Settings</div>
-          <div className="sidebar-item" onClick={toggleTheme}>
+        {/* Footer — pinned to bottom */}
+        <div className="sidebar-footer">
+          <div ref={sidebarLocBtnRef} className="sidebar-item" onClick={()=>setShowLocation(s=>!s)} title={collapsed?"Location":undefined}>
+            <span className="sidebar-item-icon">📍</span>
+            <span className="sidebar-item-label" style={{flex:1}}>{user?.city||"Set location"}<span style={{color:"var(--text3)",fontSize:9,marginLeft:4}}>{radius}mi</span></span>
+          </div>
+          <div className="sidebar-item" onClick={toggleTheme} title={collapsed?(theme==="light"?"Dark Mode":"Light Mode"):undefined}>
             <span className="sidebar-item-icon">{theme==="light"?"🌙":"☀️"}</span>
             <span className="sidebar-item-label">{theme==="light"?"Dark Mode":"Light Mode"}</span>
           </div>
-          <Link href="/profile" className={`sidebar-item${isActive("/profile")?" active":""}`} onClick={closeSidebar}>
-            <span className="sidebar-item-icon">👤</span>
-            <span className="sidebar-item-label">Profile</span>
-          </Link>
           <div className="sidebar-divider"/>
+          <div className="sidebar-user" onClick={()=>{router.push("/profile");closeSidebar();}}>
+            <div className="sidebar-avatar">{user?.avatar||"🧑‍🍳"}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div className="sidebar-user-name">{user?.name||"User"}</div>
+              <div className="sidebar-user-pts">{level} · ✦ {user?.points||0} pts</div>
+            </div>
+            <span style={{color:"var(--text3)",fontSize:11}}>›</span>
+          </div>
           <button className="sidebar-signout" onClick={logout}>
-            <span style={{fontSize:14}}>🚪</span> Sign Out
+            <span style={{fontSize:14}}>🚪</span><span className="sidebar-item-label"> Sign Out</span>
           </button>
-        </nav>
+        </div>
       </aside>
 
       {/* ── MOBILE HEADER ── */}
@@ -262,16 +265,28 @@ export function Navbar() {
       </header>
 
       {/* ── DESKTOP TOP HEADER ── */}
-      <header className="top-header" style={{marginLeft:0}}>
-        {/* Sidebar toggle */}
-        <button className="top-header-btn" onClick={openSidebar} title="Open sidebar" aria-label="Open navigation sidebar" style={{flexShrink:0}}>
-          <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"center",justifyContent:"center"}}>
-            <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
-            <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
-            <div style={{width:15,height:2,background:"var(--text2)",borderRadius:2}}/>
-          </div>
+      <header className="top-header">
+        {/* Sidebar toggle — always visible on desktop */}
+        <button
+          className="top-header-btn"
+          onClick={sidebarHidden ? openSidebar : toggleCollapse}
+          title={sidebarHidden ? "Open sidebar" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={sidebarHidden ? "Open sidebar" : "Toggle sidebar"}
+          style={{flexShrink:0}}>
+          {(!sidebarHidden && !collapsed) ? (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2"/>
+              <path d="M9 3v18"/>
+              <path d="m16 15-3-3 3-3"/>
+            </svg>
+          ) : (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2"/>
+              <path d="M9 3v18"/>
+            </svg>
+          )}
         </button>
-        {/* Page title / breadcrumb */}
+        {/* Page title */}
         <div style={{fontSize:15,fontWeight:700,color:"var(--text)",whiteSpace:"nowrap",flexShrink:0}}>
           {allNavItems.find(n=>n.href===pathname)?.icon} {allNavItems.find(n=>n.href===pathname)?.label||"Dashboard"}
         </div>
@@ -294,17 +309,6 @@ export function Navbar() {
 
         {/* Actions */}
         <div className="top-header-actions">
-
-          {/* Location + Radius */}
-          <button ref={desktopLocBtnRef} onClick={()=>setShowLocation(s=>!s)}
-            aria-label={`Change location, currently ${user?.city||"unknown"}`}
-            style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:10,background:"var(--bg)",border:"0.5px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>
-            <span style={{fontSize:14}}>📍</span>
-            <span>{user?.city||"Set location"}</span>
-            <span style={{fontSize:10,color:"var(--text3)",background:"var(--surf)",borderRadius:6,padding:"1px 5px"}}>{radius}mi</span>
-            <span style={{fontSize:9,color:"var(--text3)"}}>▾</span>
-          </button>
-
           {/* Cart */}
           <button className="top-header-btn" style={{position:"relative"}} onClick={()=>router.push("/cart")} title="Cart" aria-label={`Cart${cartCount>0?`, ${cartCount} items`:""}`}>
             🛒{cartCount>0&&<span className="top-header-badge">{cartCount}</span>}

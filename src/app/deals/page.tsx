@@ -87,8 +87,16 @@ function DealsContent() {
         .ilike("normalized_name", `%${normalized}%`)
         .gte("recorded_at", since)
         .order("recorded_at", { ascending: false })
-        .limit(100);
-      setPhItems((data || []).map((p: any) => ({
+        .limit(200);
+      // Deduplicate: same item + price + store → keep latest (data is DESC so first wins)
+      const seen = new Set<string>();
+      const unique = (data || []).filter((p: any) => {
+        const key = `${p.normalized_name}||${Number(p.price).toFixed(2)}||${p.store_name}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setPhItems(unique.map((p: any) => ({
         id: `ph-${p.id}`,
         name: p.item_name,
         normalized_name: p.normalized_name,
@@ -112,7 +120,7 @@ function DealsContent() {
     setLoading(true);
     try {
       const { data: dealRows, error: e1 } = await timedRetry(() =>
-        supabase.from("deals").select("id,sale_end,brand_id").eq("status","approved")
+        supabase.from("deals").select("id,sale_end,sale_start,brand_id").eq("status","approved")
       ) as any;
       if (e1) throw new Error(`Deals: ${e1.message}`);
       if (!dealRows?.length) { setItems([]); return; }
@@ -170,8 +178,8 @@ function DealsContent() {
   }
 
   function dL(s: string | null) { if (!s) return null; return Math.ceil((new Date(s).getTime() - Date.now()) / 86400000); }
-  function src(s: string | null, fromPH?: boolean) { return fromPH ? "🧾 Community" : s === "receipt" ? "🧾 Receipt" : s === "flyer" ? "📄 Flyer" : "✏️ Manual"; }
-  function ago(ts: string) { const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000); if (m < 60) return `${m}m`; const h = Math.floor(m / 60); if (h < 24) return `${h}h`; return `${Math.floor(h / 24)}d`; }
+  function src(s: string | null, fromPH?: boolean) { return fromPH ? "🧾 Community" : s === "receipt" ? "✅ Verified via bills" : s === "flyer" ? "📄 Flyer" : "✏️ Manual"; }
+  function ago(ts: string) { const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000); if (m < 60) return `${m} min`; const h = Math.floor(m / 60); if (h < 24) return `${h}h`; const d = Math.floor(h / 24); return `${d} day${d !== 1 ? "s" : ""}`; }
 
   const aF = [cat !== "All" && { l: cat, c: () => setCat("All") }, storeFilter !== "All" && { l: storeFilter, c: () => setStoreFilter("All") }, onSale && { l: "On Sale", c: () => setOnSale(false) }, expiringSoon && { l: "Expiring", c: () => setExpiringSoon(false) }, freshToday && { l: "Fresh", c: () => setFreshToday(false) }, maxPrice < 200 && { l: `<$${maxPrice}`, c: () => setMaxPrice(200) }].filter(Boolean) as { l: string; c: () => void }[];
   function clrAll() { setCat("All"); setStoreFilter("All"); setOnSale(false); setExpiringSoon(false); setFreshToday(false); setMaxPrice(200); }
@@ -493,7 +501,7 @@ function DealsContent() {
                               {sav && <span style={{ fontSize: 9, fontWeight: 600, color: "#30D158" }}>-{sav}%</span>}
                               {dl !== null && dl <= 3 && <span style={{ fontSize: 9, fontWeight: 600, color: "#FF3B30" }}>⏰{dl === 0 ? "Last day" : `${dl}d left`}</span>}
                             </div>
-                            <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2 }}>{src(cheapestItem.source, cheapestItem.from_price_history)} · {ago(cheapestItem.created_at)} ago{cheapestItem.store_city ? ` · ${cheapestItem.store_city}` : ""}</div>
+                            <div style={{ fontSize: 10, color: "#C8C8CC", marginTop: 2 }}>{src(cheapestItem.source, cheapestItem.from_price_history)} · {ago(cheapestItem.deal?.sale_start || cheapestItem.created_at)} ago{cheapestItem.store_city ? ` · ${cheapestItem.store_city}` : ""}</div>
                           </div>
                           <div style={{ textAlign: "right", flexShrink: 0 }}>
                             <div style={{ fontSize: 17, fontWeight: 700, color: "#FF9F0A" }}>${cheapestItem.price?.toFixed(2)}</div>
@@ -527,7 +535,7 @@ function DealsContent() {
                               <div style={{ width: 3, height: 32, borderRadius: 2, background: storeColor, flexShrink: 0 }} />
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: "#6D6D72" }}>{store.brand?.name}</div>
-                                <div style={{ fontSize: 10, color: "#AEAEB2" }}>{src(store.source, store.from_price_history)} · {ago(store.created_at)} ago</div>
+                                <div style={{ fontSize: 10, color: "#AEAEB2" }}>{src(store.source, store.from_price_history)} · {ago(store.deal?.sale_start || store.created_at)} ago</div>
                               </div>
                               <div style={{ textAlign: "right", flexShrink: 0 }}>
                                 <div style={{ fontSize: 15, fontWeight: 700, color: "#1C1C1E" }}>${store.price?.toFixed(2)}</div>

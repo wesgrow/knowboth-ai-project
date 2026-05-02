@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 
 interface CartItem { id:string;name:string;price:number;unit:string;store:string;store_slug?:string;store_id?:string;category:string;icon:string;qty:number;purchased:boolean;notes?:string;manually_added?:boolean; }
 export type { CartItem };
-interface PantryItem { id:string;name:string;price:number;unit:string;store:string;category:string;icon:string;qty:number;purchaseDate:string; }
+export interface PantryItem { id:string;name:string;price:number;unit:string;store:string;category:string;icon:string;qty:number;purchaseDate:string; }
 interface User { name:string;avatar:string;zip:string;city:string;currency:string;theme:"dark"|"light"|"auto";points:number; }
 
 interface AppStore {
@@ -25,11 +25,13 @@ interface AppStore {
   updatePantryQty:(id:string,qty:number)=>void;
   removeFromPantry:(id:string)=>void;
   restockItem:(item:PantryItem)=>void;
+  consumedStockIds: string[];
+  consumeStockItem:(id:string)=>void;
   clearUser:()=>void;
 }
 
 export const useAppStore = create<AppStore>()(persist((set,get)=>({
-  user:null, cart:[], pantry:[], radius:25, monthly_budget:undefined,
+  user:null, cart:[], pantry:[], radius:25, monthly_budget:undefined, consumedStockIds:[],
   setUser:(u)=>set({user:u}),
   updateLocation:(zip,city)=>set(s=>({user:s.user?{...s.user,zip,city}:null})),
   updateRadius:(r)=>set({radius:r}),
@@ -58,8 +60,9 @@ export const useAppStore = create<AppStore>()(persist((set,get)=>({
     if(ex){set(s=>({cart:s.cart.map(i=>i.name===item.name&&!i.purchased?{...i,qty:i.qty+1}:i)}));}
     else{set(s=>({cart:[...s.cart,{id:Date.now().toString(),name:item.name,price:item.price,unit:item.unit,store:item.store,store_slug:"",category:item.category,icon:item.icon,qty:1,purchased:false}]}));}
   },
+  consumeStockItem:(id)=>set(s=>({consumedStockIds:[...s.consumedStockIds,id]})),
   clearUser:()=>set({user:null}),
 }),{
   name:"knowboth-v1",
-  partialize:(state)=>({ cart:state.cart, pantry:state.pantry, radius:state.radius, monthly_budget:state.monthly_budget }),
+  partialize:(state)=>({ cart:state.cart, pantry:state.pantry, radius:state.radius, monthly_budget:state.monthly_budget, consumedStockIds:state.consumedStockIds }),
 }));

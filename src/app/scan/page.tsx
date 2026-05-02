@@ -330,9 +330,9 @@ export default function ScanPage() {
           item_name:i.name.trim(), category:i.category||"Other",
           store_name:storeNameForHistory, store_city:storeCityForHistory,
           price:i.unit_price, unit:i.unit, currency:result.currency||"USD",
-          source:"receipt", recorded_at:new Date().toISOString(),
+          source:"receipt", recorded_at:new Date(purchaseDate).toISOString(),
         }));
-        if (phItems.length) supabase.from("price_history").insert(phItems).then(({error:phErr})=>{ if(phErr) console.error("price_history error:",phErr); });
+        if (phItems.length) supabase.from("price_history").upsert(phItems, { onConflict: "normalized_name,store_name,recorded_at", ignoreDuplicates: true }).then(({error:phErr})=>{ if(phErr) console.error("price_history error:",phErr); });
       }
 
       const pts = 5+(items.length*2);

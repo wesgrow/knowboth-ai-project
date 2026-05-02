@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
+import type { PantryItem } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { supabaseAuth } from "@/lib/supabase";
 import toast from "react-hot-toast";
@@ -42,7 +43,7 @@ interface PurchaseHistory {
 
 export default function StockPage() {
   const router = useRouter();
-  const { user, addToCart, cart, pantry, removeFromPantry, updatePantryQty } = useAppStore();
+  const { user, addToCart, cart, pantry, removeFromPantry, updatePantryQty, consumedStockIds, consumeStockItem } = useAppStore();
   const [tab, setTab] = useState<"inventory"|"history">("inventory");
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [historyItems, setHistoryItems] = useState<PurchaseHistory[]>([]);
@@ -104,7 +105,9 @@ export default function StockPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const filteredStock = stockItems.filter(i => {
+  const activeStockItems = stockItems.filter(i => !consumedStockIds.includes(i.id));
+
+  const filteredStock = activeStockItems.filter(i => {
     if (search && !i.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (catFilter !== "All" && i.category !== catFilter) return false;
     return true;
@@ -115,8 +118,36 @@ export default function StockPage() {
     return true;
   });
 
-  const lowStock = stockItems.filter(i => i.quantity <= 1).length + pantry.filter(i => i.qty <= 1).length;
-  const totalValue = stockItems.reduce((s,i) => s + (i.price * i.quantity), 0);
+  const lowStock = activeStockItems.filter(i => i.quantity <= 1).length + pantry.filter(i => i.qty <= 1).length;
+  const totalValue = activeStockItems.reduce((s,i) => s + (i.price * i.quantity), 0);
+
+  async function addPantryToExpenses(item: PantryItem) {
+    try {
+      const { data:{ session } } = await supabaseAuth.auth.getSession();
+      if (!session) return toast.error("Sign in required");
+      const { data: dup } = await supabase.from("expense_items").select("id").ilike("name", item.name).limit(1);
+      if (dup?.length && !window.confirm(`"${item.name}" may already be in expenses. Add anyway?`)) return;
+      const { data: exp, error: e1 } = await supabase.from("expenses").insert({
+        user_id: session.user.id,
+        store_name: item.store || "Unknown",
+        store_city: "",
+        purchase_date: item.purchaseDate || new Date().toISOString().split("T")[0],
+        currency: user?.currency || "USD",
+        total: item.price * item.qty,
+        items_count: 1,
+        source: "manual",
+      }).select("id").single();
+      if (e1) throw e1;
+      const { error: e2 } = await supabase.from("expense_items").insert({
+        expense_id: exp.id, name: item.name, price: item.price,
+        quantity: item.qty, unit: item.unit || "ea", category: item.category,
+      });
+      if (e2) throw e2;
+      toast.success(`${item.name} added to expenses`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add expense");
+    }
+  }
 
   const grouped: Record<string,StockItem[]> = {};
   filteredStock.forEach(i => {
@@ -139,7 +170,7 @@ export default function StockPage() {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
             <div>
               <h1 style={{fontSize:26,fontWeight:800,color:"var(--text)",letterSpacing:-0.8}}>Stock</h1>
-              <p style={{fontSize:13,color:"var(--text2)",marginTop:3}}>{stockItems.length} items · {lowStock} low stock</p>
+              <p style={{fontSize:13,color:"var(--text2)",marginTop:3}}>{activeStockItems.length} items · {lowStock} low stock</p>
             </div>
             <button onClick={()=>router.push("/scan")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:14,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>
               🧾 Scan Bill
@@ -149,7 +180,7 @@ export default function StockPage() {
           {/* Stats */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
             {[
-              {l:"Items",v:stockItems.length,c:"#FF9F0A",i:"📦"},
+              {l:"Items",v:activeStockItems.length,c:"#FF9F0A",i:"📦"},
               {l:"Low Stock",v:lowStock,c:"#FF3B30",i:"⚠️"},
               {l:"Est. Value",v:fmt(totalValue),c:"#30D158",i:"💰"},
             ].map((s,idx)=>(
@@ -163,7 +194,7 @@ export default function StockPage() {
 
           {/* Tabs */}
           <div style={{display:"flex",background:"var(--surf)",borderRadius:12,padding:3,gap:2,marginBottom:12,boxShadow:"var(--shadow)"}}>
-            {([["inventory",`📦 Inventory (${stockItems.length})`],["history",`📋 Purchase History (${historyItems.length})`]] as const).map(([t,l])=>(
+            {([["inventory",`📦 Inventory (${activeStockItems.length})`],["history",`📋 Purchase History (${historyItems.length})`]] as const).map(([t,l])=>(
               <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",borderRadius:10,border:"none",background:tab===t?"var(--bg)":"transparent",color:tab===t?"var(--text)":"var(--text3)",boxShadow:tab===t?"var(--shadow)":"none",transition:"all 0.2s"}}>{l}</button>
             ))}
           </div>
@@ -216,6 +247,8 @@ export default function StockPage() {
                         </div>
                         <div style={{textAlign:"right",flexShrink:0}}>
                           <div style={{fontSize:14,fontWeight:700,color:"#FF9F0A"}}>{fmt(item.price)}<span style={{fontSize:10,color:"var(--text3)",fontWeight:400}}>/{item.unit}</span></div>
+                          <button onClick={()=>addPantryToExpenses(item)}
+                            style={{background:"none",border:"none",color:"var(--blue,#0A84FF)",cursor:"pointer",fontSize:11,fontWeight:700,marginTop:2}}>💸</button>
                           <button onClick={()=>{removeFromPantry(item.id);toast.success(`${item.name} removed`);}}
                             style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:14,marginTop:2}}>✕</button>
                         </div>
@@ -227,7 +260,7 @@ export default function StockPage() {
 
               {stockItems.length>0&&(
                 <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>
-                  {["All",...[...new Set(stockItems.map(i=>i.category))]].map(c=>(
+                  {["All",...[...new Set(activeStockItems.map(i=>i.category))]].map(c=>(
                     <button key={c} onClick={()=>setCatFilter(c)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,border:"none",background:catFilter===c?"#FF9F0A":"var(--surf)",color:catFilter===c?"#fff":"var(--text2)",cursor:"pointer",flexShrink:0,boxShadow:"var(--shadow)"}}>
                       {CAT_ICONS[c]||""} {c}
                     </button>
@@ -238,8 +271,8 @@ export default function StockPage() {
               {filteredStock.length===0&&!loading&&(
                 <div style={{textAlign:"center",padding:"60px 0"}}>
                   <div style={{fontSize:48,marginBottom:12}}>📦</div>
-                  <div style={{fontSize:16,fontWeight:700,color:"var(--text)",marginBottom:8}}>{stockItems.length===0?"No stock yet":"No matches"}</div>
-                  {stockItems.length===0&&<button onClick={()=>router.push("/scan")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:14,padding:"12px 24px",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>🧾 Scan Your First Bill</button>}
+                  <div style={{fontSize:16,fontWeight:700,color:"var(--text)",marginBottom:8}}>{activeStockItems.length===0?"No stock yet":"No matches"}</div>
+                  {activeStockItems.length===0&&<button onClick={()=>router.push("/scan")} style={{background:"linear-gradient(135deg,#FF9F0A,#D4800A)",color:"#fff",border:"none",borderRadius:14,padding:"12px 24px",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(255,159,10,0.3)"}}>🧾 Scan Your First Bill</button>}
                 </div>
               )}
 
@@ -267,12 +300,10 @@ export default function StockPage() {
                         </div>
                         <div style={{display:"flex",flexDirection:"column" as const,gap:5,flexShrink:0}}>
                           <button onClick={()=>{setRestockItem(item);setRestockQty(1);}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,background:"linear-gradient(135deg,#FF9F0A,#D4800A)",border:"none",borderRadius:9,padding:"7px 12px",fontSize:11,fontWeight:700,color:"#fff",cursor:"pointer",whiteSpace:"nowrap" as const,boxShadow:"0 2px 6px rgba(255,159,10,0.3)"}}>🔄 Restock</button>
-                          <button onClick={async()=>{
-                            if(!window.confirm(`Remove ${item.name} from stock?`))return;
-                            setStockItems(prev=>prev.filter(i=>i.id!==item.id));
-                            const{error}=await supabase.from("expense_items").delete().eq("id",item.id);
-                            if(error){toast.error("Failed to remove");fetchData();}
-                            else toast.success(`${item.name} removed`);
+                          <button onClick={()=>{
+                            if(!window.confirm(`Remove ${item.name} from stock view? The expense record will remain.`))return;
+                            consumeStockItem(item.id);
+                            toast.success(`${item.name} removed from stock`);
                           }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,background:"rgba(255,59,48,0.08)",border:"1px solid rgba(255,59,48,0.2)",borderRadius:9,padding:"7px 12px",fontSize:11,fontWeight:700,color:"#FF3B30",cursor:"pointer",whiteSpace:"nowrap" as const}}>✕ Remove</button>
                         </div>
                       </div>

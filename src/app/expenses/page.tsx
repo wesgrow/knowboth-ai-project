@@ -143,8 +143,19 @@ export default function ExpensesPage() {
     if (!confirm("Delete this bill? This cannot be undone.")) return;
     setDeletingId(id);
     try {
+      const expense = expenses.find(e => e.id === id);
       const { error } = await supabase.from("expenses").delete().eq("id", id);
       if (error) throw new Error(error.message);
+      // Also remove community prices that came from this bill
+      if (expense?.store_name && expense?.purchase_date) {
+        const nextDay = new Date(expense.purchase_date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        await supabase.from("price_history")
+          .delete()
+          .eq("store_name", expense.store_name)
+          .gte("recorded_at", expense.purchase_date)
+          .lt("recorded_at", nextDay.toISOString().split("T")[0]);
+      }
       setExpenses(prev => prev.filter(e => e.id !== id));
       toast.success("Bill deleted");
     } catch (e: any) {
