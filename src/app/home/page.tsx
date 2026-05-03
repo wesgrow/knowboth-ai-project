@@ -6,6 +6,7 @@ import { supabase, supabaseAuth } from "@/lib/supabase";
 import { STORE_COLORS, getLevel, formatCurrency } from "@/lib/utils";
 import { HomeTemplate } from "@/templates/HomeTemplate";
 import { Button, Card, Skeleton, Badge } from "@/ui";
+import { FLAGS } from "@/lib/flags";
 
 export default function HomePage() {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function HomePage() {
   const [totalBills, setTotalBills] = useState(0);
   const [recentItems, setRecentItems] = useState<any[]>([]);
   const [expiringCount, setExpiringCount] = useState(0);
+  const [totalSaved, setTotalSaved] = useState<number | null>(null);
+  const [userCount, setUserCount] = useState<number | null>(null);
   const [tip, setTip] = useState("Compare prices before shopping — deals change weekly.");
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingDeals, setLoadingDeals] = useState(true);
@@ -25,7 +28,15 @@ export default function HomePage() {
   const fmt = (n: number) => formatCurrency(n, currency);
   const cartCount = cart?.filter((i:any) => !i.purchased)?.length || 0;
 
-  useEffect(() => { fetchStats(); fetchDeals(); rotateTip(); }, []);
+  useEffect(() => {
+    fetchStats();
+    fetchDeals();
+    rotateTip();
+    // User count (non-blocking, cached at edge)
+    if (FLAGS.SHOW_USER_COUNT) {
+      fetch("/api/user-count").then(r => r.json()).then(d => setUserCount(d.count)).catch(() => {});
+    }
+  }, []);
 
   async function fetchStats() {
     setLoadingStats(true);
@@ -47,6 +58,7 @@ export default function HomePage() {
       setThisMonthSpent((thisMonth||[]).reduce((s:number,e:any)=>s+Number(e.total),0));
       setLastMonthSpent((lastMonth||[]).reduce((s:number,e:any)=>s+Number(e.total),0));
       setTotalBills(bills||0);
+      fetchSavings(userId); // non-blocking savings computation
 
       const { data: latestExp } = await supabase
         .from("expenses").select("id,store_name,purchase_date")
@@ -67,6 +79,43 @@ export default function HomePage() {
       }).length);
     } catch(e) { console.error("Stats error:",e); }
     setLoadingStats(false);
+  }
+
+  async function fetchSavings(userId: string) {
+    try {
+      // Step 1: get recent expense IDs (last 90 days cap to stay fast)
+      const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const { data: expRows } = await supabase.from("expenses").select("id").eq("user_id", userId).gte("purchase_date", since);
+      if (!expRows?.length) return;
+      const expIds = expRows.map((e: any) => e.id);
+
+      // Step 2: get expense items
+      const { data: items } = await supabase.from("expense_items").select("name,price,quantity").in("expense_id", expIds);
+      if (!items?.length) return;
+
+      // Step 3: match against deal_items regular prices
+      const normFn = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ").replace(/[^a-z0-9 ]/g, "");
+      const normNames = [...new Set(items.map((i: any) => normFn(i.name)))];
+      const [{ data: dealRows }, { data: phRows }] = await Promise.all([
+        supabase.from("deal_items").select("normalized_name,price,regular_price").in("normalized_name", normNames),
+        supabase.from("price_history").select("normalized_name,price").in("normalized_name", normNames),
+      ]);
+
+      // Build highest-known-price map per normalized_name
+      const highMap: Record<string, number> = {};
+      const bump = (n: string, p: number) => { if (p > (highMap[n] || 0)) highMap[n] = p; };
+      for (const r of dealRows || []) { if (r.regular_price) bump(r.normalized_name, r.regular_price); bump(r.normalized_name, r.price); }
+      for (const r of phRows || []) { bump(r.normalized_name, r.price); }
+
+      // Step 4: sum savings
+      let saved = 0;
+      for (const item of items) {
+        const n = normFn(item.name);
+        const high = highMap[n];
+        if (high && high > item.price) saved += (high - item.price) * item.quantity;
+      }
+      if (saved > 0) setTotalSaved(saved);
+    } catch { /* non-critical */ }
   }
 
   async function fetchDeals() {
@@ -186,6 +235,18 @@ export default function HomePage() {
           </div>
         ))}
       </div>
+
+      {/* Savings tracker banner */}
+      {totalSaved !== null && totalSaved > 0 && (
+        <div className="fade-up" style={{display:"flex",alignItems:"center",gap:12,background:"rgba(48,209,88,0.07)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:14,padding:"13px 16px",marginBottom:20,animationDelay:"0.08s"}}>
+          <div style={{fontSize:24,flexShrink:0}}>🏷️</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#30D158"}}>Deal savings (last 90 days)</div>
+            <div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>Based on deal prices vs what you paid</div>
+          </div>
+          <div style={{fontSize:22,fontWeight:900,color:"#30D158",flexShrink:0}}>{fmt(totalSaved)}</div>
+        </div>
+      )}
 
       {/* New user onboarding */}
       {isNewUser&&(
@@ -386,6 +447,12 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="fade-up" style={{animationDelay:"0.32s",borderTop:"1px solid var(--border2)",paddingTop:18,textAlign:"center"}}>
+        {FLAGS.SHOW_USER_COUNT && userCount !== null && userCount > 0 && (
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(0,122,255,0.06)",border:"1px solid rgba(0,122,255,0.15)",borderRadius:20,padding:"5px 14px",marginBottom:12,fontSize:12,fontWeight:600,color:"#007AFF"}}>
+            <span style={{fontSize:10}}>●</span>
+            {userCount.toLocaleString()} people tracking groceries
+          </div>
+        )}
         <div style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>
           © {new Date().getFullYear()} KnowBoth.AI — Smart grocery tracking for your community
         </div>

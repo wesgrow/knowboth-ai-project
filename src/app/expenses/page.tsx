@@ -73,6 +73,7 @@ export default function ExpensesPage() {
   const [loadingItems, setLoadingItems] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [dealSaved, setDealSaved] = useState<number | null>(null);
   const currency = user?.currency || "USD";
 
   const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
@@ -113,6 +114,33 @@ export default function ExpensesPage() {
   useEffect(() => {
     fetchExpenses();
   }, [fetchExpenses]);
+
+  // Compute deal savings whenever expenses list changes
+  useEffect(() => {
+    if (!expenses.length) return;
+    const normFn = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ").replace(/[^a-z0-9 ]/g, "");
+    const expIds = expenses.map(e => e.id);
+    supabase.from("expense_items").select("name,price,quantity").in("expense_id", expIds)
+      .then(async ({ data: items }) => {
+        if (!items?.length) return;
+        const normNames = [...new Set(items.map(i => normFn(i.name)))];
+        const [{ data: dealRows }, { data: phRows }] = await Promise.all([
+          supabase.from("deal_items").select("normalized_name,price,regular_price").in("normalized_name", normNames),
+          supabase.from("price_history").select("normalized_name,price").in("normalized_name", normNames),
+        ]);
+        const highMap: Record<string, number> = {};
+        const bump = (n: string, p: number) => { if (p > (highMap[n] || 0)) highMap[n] = p; };
+        for (const r of dealRows || []) { if (r.regular_price) bump(r.normalized_name, r.regular_price); bump(r.normalized_name, r.price); }
+        for (const r of phRows || []) { bump(r.normalized_name, r.price); }
+        let saved = 0;
+        for (const item of items) {
+          const n = normFn(item.name);
+          const high = highMap[n];
+          if (high && high > item.price) saved += (high - item.price) * item.quantity;
+        }
+        if (saved > 0) setDealSaved(saved);
+      });
+  }, [expenses]);
 
   async function loadItems(expenseId: string) {
     if (expandedId === expenseId) {
@@ -244,6 +272,17 @@ export default function ExpensesPage() {
             </div>
           ))}
         </div>
+
+        {dealSaved !== null && dealSaved > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(48,209,88,0.07)", border: "1px solid rgba(48,209,88,0.2)", borderRadius: 14, padding: "13px 16px", marginBottom: 14 }}>
+            <div style={{ fontSize: 22, flexShrink: 0 }}>🏷️</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#30D158" }}>You saved {fmt(dealSaved)} by buying at deal prices</div>
+              <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>vs highest known prices for these items</div>
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: "#30D158", flexShrink: 0 }}>{fmt(dealSaved)}</div>
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 12, paddingBottom: 2 }}>
           {PRESETS.map(p => (

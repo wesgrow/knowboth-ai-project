@@ -16,7 +16,7 @@ const CAT_ICONS: Record<string,string> = {
 
 export default function CartPage() {
   const router = useRouter();
-  const { cart, removeFromCart, updateQty, clearCart, togglePurchased, moveToPantry, updateNotes, user } = useAppStore();
+  const { cart, cartLoading, removeFromCart, updateQty, clearCart, togglePurchased, moveToPantry, updateNotes, user } = useAppStore();
   const [showSummary, setShowSummary] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   // highPriceMap: highest known price per normalized_name (for savings calc)
@@ -158,8 +158,16 @@ export default function CartPage() {
             </div>
           </div>
 
+          {/* Loading state — cart is fetched from Supabase, not localStorage */}
+          {cartLoading && (
+            <div className="fade-up" style={{textAlign:"center",padding:"72px 0"}}>
+              <div style={{fontSize:36,marginBottom:16,opacity:0.4}}>🛒</div>
+              <div style={{fontSize:14,color:"var(--text3)"}}>Loading your cart…</div>
+            </div>
+          )}
+
           {/* Empty state */}
-          {cart.length === 0 && (
+          {!cartLoading && cart.length === 0 && (
             <div className="fade-up" style={{textAlign:"center",padding:"72px 0"}}>
               <div style={{fontSize:56,marginBottom:16}}>🛒</div>
               <div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:8}}>Your cart is empty</div>
@@ -172,7 +180,7 @@ export default function CartPage() {
           )}
 
           {/* Store grouped items */}
-          {Object.entries(groups).map(([storeName, items]) => {
+          {!cartLoading && Object.entries(groups).map(([storeName, items]) => {
             const color = STORE_COLORS[items[0]?.store_slug] || "#FF9F0A";
             const storeTotal = items.reduce((s,i)=>(i.price||0)*i.qty+s,0);
             return (

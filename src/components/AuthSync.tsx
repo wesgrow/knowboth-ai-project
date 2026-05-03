@@ -42,15 +42,21 @@ async function syncUserProfile(session: any) {
 }
 
 export function AuthSync() {
-  const { setUser, clearUser, setCart, updateBudget } = useAppStore();
+  const { setUser, clearUser, setCart, setCartLoading, updateBudget } = useAppStore();
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  // Prevents the realtime-received update from triggering a write-back to DB
+  const fromRemoteRef = useRef(false);
 
-  // Subscribe to cart changes — debounce-save to DB
+  // Subscribe to cart changes — debounce-save to DB (skip if change came from remote)
   useEffect(() => {
     let prevCart = useAppStore.getState().cart;
     const unsubscribe = useAppStore.subscribe((state) => {
       if (state.cart !== prevCart) {
         prevCart = state.cart;
+        if (fromRemoteRef.current) {
+          fromRemoteRef.current = false;
+          return;
+        }
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => saveUserCart(state.cart), 1500);
       }
@@ -63,33 +69,65 @@ export function AuthSync() {
 
   // Auth sync — load user profile + cart from DB on session
   useEffect(() => {
-    supabaseAuth.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        const { profile, monthly_budget } = await syncUserProfile(session);
-        setUser(profile);
-        if (monthly_budget !== undefined) updateBudget(monthly_budget);
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+
+    async function setupSession(session: any, isSignIn: boolean) {
+      const { profile, monthly_budget } = await syncUserProfile(session);
+      setUser(profile);
+      if (monthly_budget !== undefined) updateBudget(monthly_budget);
+
+      if (isSignIn) {
+        setCartLoading(true);
         const dbCart = await loadUserCart();
         setCart(dbCart);
+        setCartLoading(false);
       }
+
+      // Real-time: watch cart changes from other devices on this user's profile row
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+      realtimeChannel = supabase
+        .channel(`cart-sync:${session.user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "user_profiles",
+            filter: `user_id=eq.${session.user.id}`,
+          },
+          (payload: any) => {
+            const remoteCart = payload.new?.cart_items;
+            if (!Array.isArray(remoteCart)) return;
+            const currentCart = useAppStore.getState().cart;
+            // Skip if the cart is identical (our own write echoed back)
+            if (JSON.stringify(currentCart) === JSON.stringify(remoteCart)) return;
+            fromRemoteRef.current = true;
+            useAppStore.getState().setCart(remoteCart);
+          }
+        )
+        .subscribe();
+    }
+
+    supabaseAuth.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) await setupSession(session, true);
+      else setCartLoading(false); // not logged in — nothing to load
     });
 
     const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (event, session) => {
       if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-        const { profile, monthly_budget } = await syncUserProfile(session);
-        setUser(profile);
-        if (monthly_budget !== undefined) updateBudget(monthly_budget);
-        if (event === "SIGNED_IN") {
-          const dbCart = await loadUserCart();
-          setCart(dbCart);
-        }
+        await setupSession(session, event === "SIGNED_IN");
       }
       if (event === "SIGNED_OUT") {
+        if (realtimeChannel) supabase.removeChannel(realtimeChannel);
         clearUser();
         window.location.href = "/auth";
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+    };
   }, []);
 
   return null;
