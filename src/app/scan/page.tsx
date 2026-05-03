@@ -14,6 +14,8 @@ type Step = "upload"|"review"|"confirm";
 interface BillItem {
   id: string;
   name: string;
+  originalName?: string;  // AI-extracted name before it was matched to a deal item
+  dealLinked?: boolean;   // true when name was auto-matched or manually linked to a deal item
   unit_price: number;
   actual_price: number;
   quantity: number;
@@ -96,7 +98,68 @@ export default function ScanPage() {
   const [autoLinked, setAutoLinked] = useState(false);
   const [savingsAnalysis, setSavingsAnalysis] = useState<{totalSavingsPossible:number, items:any[]} | null>(null);
   const [dealSavings, setDealSavings] = useState<{totalSaved:number, items:any[]} | null>(null);
+  const [nameMatching, setNameMatching] = useState(false);
+  // deal search for manual linking in edit mode
+  const [dealQuery, setDealQuery] = useState("");
+  const [dealQueryResults, setDealQueryResults] = useState<{normalized_name:string; name:string}[]>([]);
+  const [dealQueryLoading, setDealQueryLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const dealSearchTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const normName = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ").replace(/[^a-z0-9 ]/g, "");
+
+  async function matchNamesToDeals(extractedItems: BillItem[]): Promise<BillItem[]> {
+    try {
+      setNameMatching(true);
+      const { data: dealItems } = await supabase
+        .from("deal_items")
+        .select("normalized_name,name")
+        .order("name")
+        .limit(1000);
+      if (!dealItems?.length) return extractedItems;
+
+      return extractedItems.map(item => {
+        const iNorm = normName(item.name);
+        // 1. Exact normalized_name match
+        const exact = dealItems.find(d => d.normalized_name === iNorm);
+        if (exact && exact.name !== item.name) {
+          return { ...item, name: exact.name, originalName: item.name, dealLinked: true };
+        }
+        // 2. All words in a deal item's normalized_name appear inside the bill item's normalized words
+        const iWords = new Set(iNorm.split(" ").filter(Boolean));
+        const best = dealItems
+          .filter(d => {
+            const dWords = d.normalized_name.split(" ").filter(Boolean);
+            return dWords.length >= 2 && dWords.every((w: string) => iWords.has(w));
+          })
+          .sort((a, b) => b.normalized_name.length - a.normalized_name.length)[0];
+        if (best && best.name !== item.name) {
+          return { ...item, name: best.name, originalName: item.name, dealLinked: true };
+        }
+        return item;
+      });
+    } catch {
+      return extractedItems;
+    } finally {
+      setNameMatching(false);
+    }
+  }
+
+  function searchDeals(query: string) {
+    clearTimeout(dealSearchTimer.current);
+    if (!query.trim()) { setDealQueryResults([]); return; }
+    setDealQueryLoading(true);
+    dealSearchTimer.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from("deal_items")
+        .select("normalized_name,name")
+        .ilike("name", `%${query.trim()}%`)
+        .order("name")
+        .limit(8);
+      setDealQueryResults(data || []);
+      setDealQueryLoading(false);
+    }, 280);
+  }
 
   useEffect(()=>{
     supabase.from("brands").select("id,name,slug").order("name").then(({data})=>setBrands(data||[]));
@@ -221,7 +284,7 @@ export default function ScanPage() {
     setResult(null); setSaved(false); setItems([]); setBillNumber(""); setDupWarn(null); setScanError(null);
     setLinkedBrand(null); setLinkedLocation(null); setLocations([]); setAutoLinked(false);
     setNewBrandName(""); setNewLocCity(""); setNewLocZip(""); setShowAddBrand(false); setShowAddLoc(false);
-    setSavingsAnalysis(null);
+    setSavingsAnalysis(null); setDealQuery(""); setDealQueryResults([]);
     setStep("upload");
   }
 
@@ -244,7 +307,9 @@ export default function ScanPage() {
         return item;
       });
       extracted.sort((a,b)=>a.confidence-b.confidence);
-      setResult(data); setItems(extracted); setManualTotal(data.total||0); setBillNumber(data.bill_number||"");
+      // Match extracted names to canonical deal item names for cross-feature consistency
+      const matched = await matchNamesToDeals(extracted);
+      setResult(data); setItems(matched); setManualTotal(data.total||0); setBillNumber(data.bill_number||"");
       setStep("review");
       toast.success(`✦ ${extracted.length} items found!`);
       if (data.store_name) await autoLinkStore(data.store_name, data.store_city||"", data.store_zip||"");
@@ -640,6 +705,14 @@ export default function ScanPage() {
                   {zeroPriceCount===0&&noNameCount===0&&lowConfCount===0&&<Alert type="info" message="All items look good!"/>}
                 </div>
 
+                {/* Matching indicator */}
+                {nameMatching&&(
+                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"rgba(48,209,88,0.06)",border:"1px solid rgba(48,209,88,0.2)",borderRadius:10,marginBottom:10}}>
+                    <span style={{fontSize:13}}>📋</span>
+                    <span style={{fontSize:12,color:"#30D158",fontWeight:500}}>Matching item names to deal catalogue…</span>
+                  </div>
+                )}
+
                 {/* Toolbar */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                   <span style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>{items.length} items · ${total.toFixed(2)}</span>
@@ -655,24 +728,28 @@ export default function ScanPage() {
                   {items.map(item=>(
                     <div key={item.id} style={{background:"var(--surf)",borderRadius:14,overflow:"hidden",boxShadow:"var(--shadow)",border:item.confidence<60||item.unit_price<=0?"1px solid rgba(255,59,48,0.2)":"1px solid transparent"}}>
                       {editingId!==item.id?(
-                        <div onClick={()=>setEditingId(item.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",cursor:"pointer"}}>
-                          <div style={{width:8,height:8,borderRadius:"50%",background:STOCK_CATS.includes(item.category)?"#30D158":"#AEAEB2",flexShrink:0}}/>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" as const}}>
-                              <span style={{fontSize:14,fontWeight:600,color:item.name?"var(--text)":"#FF3B30"}}>{item.name||"⚠️ Missing name"}</span>
-                              <ConfidenceBadge score={item.confidence}/>
-                              {item.unit_price<=0&&<span style={{fontSize:9,fontWeight:700,background:"rgba(255,59,48,0.1)",color:"#FF3B30",borderRadius:20,padding:"2px 7px"}}>⚠️ No price</span>}
-                            <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>
-                              {item.category} · qty {item.quantity} · <span style={{fontWeight:600,color:STOCK_CATS.includes(item.category)?"#30D158":"var(--text3)"}}>{STOCK_CATS.includes(item.category)?"📦 Stock":"📋 History"}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px"}}>
+                          <div onClick={()=>setEditingId(item.id)} style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0,cursor:"pointer"}}>
+                            <div style={{width:8,height:8,borderRadius:"50%",background:STOCK_CATS.includes(item.category)?"#30D158":"#AEAEB2",flexShrink:0}}/>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" as const}}>
+                                <span style={{fontSize:14,fontWeight:600,color:item.name?"var(--text)":"#FF3B30"}}>{item.name||"⚠️ Missing name"}</span>
+                                <ConfidenceBadge score={item.confidence}/>
+                                {item.unit_price<=0&&<span style={{fontSize:9,fontWeight:700,background:"rgba(255,59,48,0.1)",color:"#FF3B30",borderRadius:20,padding:"2px 7px"}}>⚠️ No price</span>}
+                                {item.dealLinked&&<span style={{fontSize:9,fontWeight:700,background:"rgba(48,209,88,0.1)",color:"#30D158",borderRadius:20,padding:"2px 7px",whiteSpace:"nowrap" as const}}>📋 Deal name</span>}
+                              </div>
+                              {item.originalName&&<div style={{fontSize:10,color:"var(--text3)",marginTop:1}}>was: {item.originalName}</div>}
+                              <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>
+                                {item.category} · qty {item.quantity} · <span style={{fontWeight:600,color:STOCK_CATS.includes(item.category)?"#30D158":"var(--text3)"}}>{STOCK_CATS.includes(item.category)?"📦 Stock":"📋 History"}</span>
+                              </div>
+                            </div>
+                            <div style={{textAlign:"right" as const,flexShrink:0}}>
+                              <div style={{fontSize:15,fontWeight:700,color:item.unit_price>0?"#FF9F0A":"#FF3B30"}}>${item.actual_price.toFixed(2)}</div>
+                              <div style={{fontSize:10,color:"var(--text3)"}}>${item.unit_price.toFixed(2)}/ea × {item.quantity}</div>
+                              {(item.discount??0)>0&&<div style={{fontSize:10,color:"#30D158",fontWeight:600}}>−${(item.discount??0).toFixed(2)} saved</div>}
                             </div>
                           </div>
-                          <div style={{textAlign:"right",flexShrink:0}}>
-                            <div style={{fontSize:15,fontWeight:700,color:item.unit_price>0?"#FF9F0A":"#FF3B30"}}>${item.actual_price.toFixed(2)}</div>
-                            <div style={{fontSize:10,color:"var(--text3)"}}>${item.unit_price.toFixed(2)}/ea × {item.quantity}</div>
-                            {(item.discount??0)>0&&<div style={{fontSize:10,color:"#30D158",fontWeight:600}}>−${(item.discount??0).toFixed(2)} saved</div>}
-                          </div>
-                        </div>
-                        <button onClick={e=>{e.stopPropagation();removeItem(item.id);}} style={{background:"rgba(255,59,48,0.1)",border:"none",borderRadius:8,padding:"5px 8px",fontSize:11,color:"#FF3B30",cursor:"pointer",flexShrink:0}}>✕</button>
+                          <button onClick={e=>{e.stopPropagation();removeItem(item.id);}} style={{background:"rgba(255,59,48,0.1)",border:"none",borderRadius:8,padding:"5px 8px",fontSize:11,color:"#FF3B30",cursor:"pointer",flexShrink:0}}>✕</button>
                         </div>
                       ):(
                         <div style={{padding:14}}>
@@ -686,7 +763,37 @@ export default function ScanPage() {
                           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                             <div style={{gridColumn:"1/-1"}}>
                               <div style={{fontSize:10,fontWeight:600,color:"var(--text3)",marginBottom:4}}>ITEM NAME</div>
-                              <input style={{width:"100%",background:"var(--bg)",border:!item.name?"1px solid rgba(255,59,48,0.3)":"none",borderRadius:10,padding:"10px 12px",fontSize:14,color:"var(--text)",outline:"none"}} value={item.name} onChange={e=>updateItem(item.id,"name",e.target.value)} placeholder="Item name"/>
+                              <input style={{width:"100%",background:"var(--bg)",border:!item.name?"1px solid rgba(255,59,48,0.3)":"none",borderRadius:10,padding:"10px 12px",fontSize:14,color:"var(--text)",outline:"none"}} value={item.name} onChange={e=>{updateItem(item.id,"name",e.target.value);updateItem(item.id,"dealLinked",false);updateItem(item.id,"originalName",undefined);}} placeholder="Item name"/>
+                              {/* Deal name search — link this item to a canonical deal name */}
+                              <div style={{marginTop:6}}>
+                                <div style={{fontSize:10,fontWeight:600,color:"var(--text3)",marginBottom:4}}>🔗 LINK TO DEAL NAME <span style={{fontWeight:400,color:"var(--text3)"}}>(optional — standardize name)</span></div>
+                                <input
+                                  value={dealQuery}
+                                  onChange={e=>{ setDealQuery(e.target.value); searchDeals(e.target.value); }}
+                                  placeholder="Search deal items…"
+                                  style={{width:"100%",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 12px",fontSize:13,color:"var(--text)",outline:"none"}}
+                                />
+                                {dealQueryLoading&&<div style={{fontSize:11,color:"var(--text3)",padding:"4px 2px"}}>Searching…</div>}
+                                {dealQueryResults.length>0&&(
+                                  <div style={{background:"var(--surf)",borderRadius:10,border:"1px solid var(--border)",marginTop:4,overflow:"hidden"}}>
+                                    {dealQueryResults.map(d=>(
+                                      <div key={d.normalized_name}
+                                        onClick={()=>{
+                                          const prev = item.name;
+                                          updateItem(item.id,"name",d.name);
+                                          updateItem(item.id,"dealLinked",true);
+                                          updateItem(item.id,"originalName", prev !== d.name ? prev : undefined);
+                                          setDealQuery(""); setDealQueryResults([]);
+                                        }}
+                                        style={{padding:"9px 12px",fontSize:13,color:"var(--text)",cursor:"pointer",borderBottom:"0.5px solid var(--border2)",display:"flex",alignItems:"center",gap:8}}>
+                                        <span style={{fontSize:11,color:"#30D158",fontWeight:700,background:"rgba(48,209,88,0.1)",borderRadius:6,padding:"1px 6px",flexShrink:0}}>📋</span>
+                                        {d.name}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {item.dealLinked&&<div style={{fontSize:10,color:"#30D158",fontWeight:600,marginTop:4}}>✓ Linked to deal name{item.originalName?` (was: ${item.originalName})`:""}</div>}
+                              </div>
                             </div>
                             <div>
                               <div style={{fontSize:10,fontWeight:600,color:"var(--text3)",marginBottom:4}}>UNIT PRICE ($)</div>
